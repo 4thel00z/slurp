@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="logo.jpeg" alt="Slurp Logo" width="400"/>
-
 # 🌊 Slurp
+
+<img src="logo.jpeg" alt="Slurp Logo" width="400"/>
 
 ### Cross-Document RAG Dataset Generator
 
