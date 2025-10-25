@@ -1,5 +1,6 @@
 from textwrap import dedent
 
+
 EASY_PROMPT = dedent(
     """Du erstellst Evaluierungsfragen für ein konversationelles RAG-System (Retrieval-Augmented Generation).
 
@@ -152,10 +153,10 @@ ANWENDUNG: „Was sollte ich tun, wenn [konkretes Szenario] eintritt?“, „Wie
 SYNTHESEN: „Was würde passieren, wenn [konkrete Bedingung]?“, „Wie wirken [konkrete Anforderungen] zusammen?“
 
 VERMEIDE VAGE BEZÜGE – Sei immer spezifisch:
-❌ „Was sollte ich tun, wenn das passiert?“  
+❌ „Was sollte ich tun, wenn das passiert?“
 ✅ „Was sollte ich tun, wenn der Server während der Bereitstellung abstürzt?“
 
-❌ „Wie hängt das mit jenem zusammen?“  
+❌ „Wie hängt das mit jenem zusammen?“
 ✅ „Wie hängt die Backup-Richtlinie mit dem Notfallwiederherstellungsprozess zusammen?“
 
 WICHTIG: Verwende verschiedene Frageanfänge. Vermeide sich wiederholende Muster wie „Kannst du mir mehr über... erzählen?“. Formuliere vielfältige, konkrete Fragen, die zum Dokumentinhalt passen.
@@ -421,10 +422,10 @@ BEISPIELFORMATE:
 - „Unser Entwicklungsteam wächst schnell, und es kommt häufiger zu Problemen bei Deployments. Das QA-Team sagt, es braucht mehr Testzeit, während das Produktteam schnellere Releases fordert. Basierend auf unseren aktuellen Entwicklungs- und Deploymentprozessen: Welche Verbesserungen würden helfen, die Qualität zu sichern und gleichzeitig aggressive Zeitpläne einzuhalten? Besonders interessieren mich die Auswirkungen auf Rollback-Fähigkeiten und Incident-Response.“
 
 VERMEIDE VAGE FORMULIERUNGEN – Sei immer konkret:
-❌ „Was soll ich tun, wenn das passiert?“  
+❌ „Was soll ich tun, wenn das passiert?“
 ✅ „Was soll ich tun, wenn der primäre Datenbankserver während der Hauptgeschäftszeit ausfällt?“
 
-❌ „Wie hängt das mit jenem zusammen?“  
+❌ „Wie hängt das mit jenem zusammen?“
 ✅ „Wie hängt die Backup-Strategie mit unseren Notfallwiederherstellungsverfahren für kundenseitige Systeme zusammen?“
 
 WICHTIG: Verwende unterschiedliche Anfrageformate und gesprächsnahe Sprache. Erstelle Anfragen, die zur Komplexität der Dokumente passen und wie reale Nutzeranliegen klingen.

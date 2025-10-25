@@ -1,11 +1,10 @@
 # redpanda.yaml
 redpanda:
   kafka_api:
-    - name: PLAINTEXT
-      address: 0.0.0.0
-      port: 9092
+  - name: PLAINTEXT
+    address: 0.0.0.0
+    port: 9092
   advertised_kafka_api:
-    - name: PLAINTEXT
-      address: redpanda
-      port: 9092
-
+  - name: PLAINTEXT
+    address: redpanda
+    port: 9092

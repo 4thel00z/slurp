@@ -90,6 +90,7 @@ python -m slurp worker --workers 4 --generator-language de
 ## Command Line Options
 
 ### Scraper Options
+
 - `--confluence-space`: Confluence space key to scrape
 - `--confluence-max-pages`: Maximum number of pages to fetch (default: 50)
 - `--confluence-months-back`: Only process pages modified within last N months (0 = no filter, default: 0)
@@ -98,6 +99,7 @@ python -m slurp worker --workers 4 --generator-language de
 - `--confluence-page-batch-size`: Number of pages to fetch per batch (default: 50)
 
 ### Worker Options
+
 - `--generator-batch-size`: Number of documents to process together (default: 1)
 - `--generator-model`: LLM model to use (default: "google/gemini-2.5-flash-preview-05-20")
 - `--generator-language`: Language for generated questions (default: "de")

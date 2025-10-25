@@ -1,8 +1,13 @@
 import asyncio
 from asyncio import Semaphore
+from collections.abc import AsyncIterator
+from collections.abc import Awaitable
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import AsyncContextManager, Awaitable, Callable, Iterable, TypeVar, AsyncIterator
-from typing import AsyncGenerator, Any, Callable, TypeVar
+from typing import Any
+from typing import AsyncContextManager
+from typing import TypeVar
+
 
 T = TypeVar("T")
 
@@ -12,13 +17,11 @@ async def noop_ctx(*args, **kwargs):
     yield
 
 
-async def run_limited(
-        *coros: Awaitable[T],
-        limit: int = 10,
-        sem_class: Callable[[int], AsyncContextManager[None]] = lambda limit: Semaphore(
-            limit
-        ),
-        return_exceptions: bool = True,
+async def run_limited[T](
+    *coros: Awaitable[T],
+    limit: int = 10,
+    sem_class: Callable[[int], AsyncContextManager[None]] = lambda limit: Semaphore(limit),
+    return_exceptions: bool = True,
 ) -> list[T]:
     """
     Run a batch of coroutines with a concurrency limit.
@@ -53,8 +56,7 @@ AsyncIteratorT = TypeVar("AsyncIteratorT")
 
 
 async def consume_async_gen(
-        agen: AsyncIterator[AsyncIteratorT],
-        handler: Callable[[AsyncIteratorT], Any]
+    agen: AsyncIterator[AsyncIteratorT], handler: Callable[[AsyncIteratorT], Any]
 ) -> None:
     """
     Consume an async generator and apply `handler` to each yielded item.
@@ -73,15 +75,15 @@ async def consume_async_gen(
 def flatten_lazy(iterable):
     """
     Flatten a nested iterable (list of lists) into a single iterable.
-    
+
     Args:
         iterable: A nested iterable to flatten
-        
+
     Yields:
         Individual items from the nested structure
     """
     for item in iterable:
-        if isinstance(item, (list, tuple)):
+        if isinstance(item, list | tuple):
             yield from item
         else:
             yield item

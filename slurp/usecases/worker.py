@@ -1,23 +1,26 @@
-import sys
 import asyncio
 import logging
+import sys
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import AsyncGenerator, AsyncIterator
+from dataclasses import field
+
 
 logger = logging.getLogger(__name__)
 
-from slurp.domain.config import AppConfig, SQLiteConfig
-from slurp.adapters.kafka import KafkaConsumer
 from slurp.adapters.downloader.confluence import ConfluenceDownloader
+from slurp.adapters.generators.llm import LLMGenerator
+from slurp.adapters.kafka import KafkaConsumer
 from slurp.adapters.mutators.html_parser import HTMLParser
 from slurp.adapters.mutators.sqlite_persistence import SqlitePersistence
-from slurp.adapters.generators.llm import LLMGenerator
-from slurp.domain.models import Generation, TaskResult
+from slurp.domain.config import AppConfig
+from slurp.domain.models import Generation
+from slurp.domain.models import TaskResult
 
 
 @dataclass
 class WorkerUsecase:
-    app_config: AppConfig = None
+    app_config: AppConfig = field(init=False)
 
     def __post_init__(self):
         # load all configuration from environment/args
@@ -31,21 +34,14 @@ class WorkerUsecase:
         self.downloader = ConfluenceDownloader(self.app_config.confluence)
         self.persistence = SqlitePersistence(sqlite_config=self.app_config.sqlite)
         # mutators: HTML parsing then persistence
-        self.mutators = [
-            self.consumer.acknowledge,
-            HTMLParser(),
-            self.persistence
-        ]
+        self.mutators = [self.consumer.acknowledge, HTMLParser(), self.persistence]
         # formatter for question/answer generation
         self.generator = LLMGenerator(
-            token_config=self.app_config.token,
-            config=self.app_config.generator,
+            token_config=self.app_config.token, config=self.app_config.generator
         )
         if not self.generator:
             logger.warning("No generator configured, skipping generation step.")
-        self.generation_mutators = [
-            self.persistence
-        ]
+        self.generation_mutators = [self.persistence]
 
     async def process(self, result: TaskResult) -> AsyncIterator[Generation]:
         if not self.app_config.generator.enabled:
@@ -58,7 +54,9 @@ class WorkerUsecase:
             gen = await m(gen)
             if not gen:
                 return
-        logger.info(f"Generated 1‐item batch → {len(gen.question_answers)} QAs from '{result.title}'.")
+        logger.info(
+            f"Generated 1‐item batch → {len(gen.question_answers)} QAs from '{result.title}'."
+        )
         yield gen
 
     async def process_batch(self, results: list[TaskResult]) -> AsyncIterator[Generation]:
@@ -67,7 +65,7 @@ class WorkerUsecase:
 
         async for gen in self.generator.generate_from_batch(*results):
             for m in self.generation_mutators:
-                gen = await m(gen)
+                gen = await m(gen)  # noqa: PLW2901 - intentional mutation chain
                 if not gen:
                     break
 
@@ -84,15 +82,21 @@ class WorkerUsecase:
         logger.info("Starting worker run loop.")
         async with self.consumer:
             async for task in self.consumer():
-                logger.info(f"Processing task: {task.idempotency_key} with downloader: {task.downloader}")
+                logger.info(
+                    f"Processing task: {task.idempotency_key} with downloader: {task.downloader}"
+                )
                 result = await self.downloader(task)
                 if not result:
                     continue
-                logger.info(f"Finished downloading task: {task.idempotency_key}. Result: {result.content[:100]}...")
+                logger.info(
+                    f"Finished downloading task: {task.idempotency_key}. Result: {result.content[:100]}..."
+                )
 
                 # apply mutators
                 for mut in self.mutators:
-                    logger.info(f"Applying mutator: {mut.__class__.__name__} to task: {task.idempotency_key}")
+                    logger.info(
+                        f"Applying mutator: {mut.__class__.__name__} to task: {task.idempotency_key}"
+                    )
                     result = await mut(result)
                     if not result:
                         break
@@ -101,7 +105,9 @@ class WorkerUsecase:
                     logger.info(f"No result for task: {task.idempotency_key}")
                     continue
 
-                logger.info(f"Finished mutating task: {task.idempotency_key}. Result: {result.content[:100]}...")
+                logger.info(
+                    f"Finished mutating task: {task.idempotency_key}. Result: {result.content[:100]}..."
+                )
                 results.append(result)
                 # single-item mode
                 if batch_size <= 1:
@@ -118,7 +124,8 @@ class WorkerUsecase:
                     results.clear()
 
             # final flush of leftovers
-            if not results: return
+            if not results:
+                return
 
             if batch_size <= 1:
                 current = results.pop(0)
@@ -131,11 +138,9 @@ class WorkerUsecase:
                 results.clear()
 
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     from slurp.adapters.asyncio import consume_async_gen
-
 
     def handle(generation):
         for qa in generation.question_answers:
@@ -147,6 +152,5 @@ if __name__ == "__main__":
         usecase = WorkerUsecase()
 
         await consume_async_gen(usecase.run(), handle)
-
 
     asyncio.run(main())
