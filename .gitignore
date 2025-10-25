@@ -40,6 +40,9 @@ htmlcov/
 
 # Project specific
 data.db
+CLAUDE.md
+DEVELOPMENT.md
+reports/
 
 # OS
 .DS_Store
