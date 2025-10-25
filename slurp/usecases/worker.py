@@ -5,9 +5,6 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from dataclasses import field
 
-
-logger = logging.getLogger(__name__)
-
 from slurp.adapters.downloader.confluence import ConfluenceDownloader
 from slurp.adapters.generators.llm import LLMGenerator
 from slurp.adapters.kafka import KafkaConsumer
@@ -16,6 +13,9 @@ from slurp.adapters.mutators.sqlite_persistence import SqlitePersistence
 from slurp.domain.config import AppConfig
 from slurp.domain.models import Generation
 from slurp.domain.models import TaskResult
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
