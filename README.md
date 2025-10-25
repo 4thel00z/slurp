@@ -4,7 +4,7 @@
 
 # 🌊 Slurp
 
-### Multi-turn RAG Dataset Generator
+### Cross-Document RAG Dataset Generator
 
 A comprehensive tool for generating RAG (Retrieval-Augmented Generation) datasets from Confluence pages (more sources planned).
 
