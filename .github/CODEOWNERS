@@ -1,0 +1,16 @@
+# Code owners are automatically requested for review when someone opens a PR
+
+# Default owner for everything
+* @4thel00z
+
+# GitHub Actions workflows
+/.github/ @4thel00z
+
+# Configuration files
+*.toml @4thel00z
+*.yaml @4thel00z
+*.yml @4thel00z
+
+# Documentation
+*.md @4thel00z
+/docs/ @4thel00z
