@@ -4,10 +4,6 @@ from dataclasses import asdict
 from dataclasses import dataclass
 
 import orjson
-
-
-logger = logging.getLogger(__name__)
-
 from aiokafka import AIOKafkaConsumer
 from aiokafka import AIOKafkaProducer
 
@@ -16,6 +12,9 @@ from slurp.domain.models import Task
 from slurp.domain.models import TaskResult
 from slurp.domain.ports import ConsumerProtocol
 from slurp.domain.ports import QueueSubmitterProtocol
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
