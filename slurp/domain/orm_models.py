@@ -1,11 +1,12 @@
-from dataclasses import asdict
-from typing import Optional, Dict
 from uuid import uuid4
 
-from sqlalchemy import Column, JSON
-from sqlmodel import SQLModel, Field
+from sqlalchemy import JSON
+from sqlalchemy import Column
+from sqlmodel import Field
+from sqlmodel import SQLModel
 
-from slurp.domain.models import TaskResult, Generation
+from slurp.domain.models import Generation
+from slurp.domain.models import TaskResult
 
 
 class TaskResultORM(SQLModel, table=True):
@@ -48,16 +49,17 @@ class GenerationORM(SQLModel, table=True):
         Convert a Generation to a GenerationORM instance.
         """
         return GenerationORM(
-            question_answers={
-                qa.question: qa.answer for qa in generation.question_answers
-            },
+            question_answers={qa.question: qa.answer for qa in generation.question_answers},
             references=[
-                dict(status_code=ref.status_code or 0,
-                     headers=dict(ref.headers) or {},
-                     content=ref.content,
-                     hash=ref.hash,
-                     url=ref.url,
-                     title=ref.title or "",) for ref in generation.references
+                {
+                    "status_code": ref.status_code or 0,
+                    "headers": dict(ref.headers) or {},
+                    "content": ref.content,
+                    "hash": ref.hash,
+                    "url": ref.url,
+                    "title": ref.title or "",
+                }
+                for ref in generation.references
             ],
             language=generation.language,
         )

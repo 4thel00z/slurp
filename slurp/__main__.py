@@ -1,14 +1,15 @@
 import asyncio
 import logging
+import multiprocessing
 import os
 import sys
-import multiprocessing
 from multiprocessing import Process
 
 from slurp.adapters.asyncio import consume_async_gen
 from slurp.domain.config import create_cli_parser
 from slurp.usecases.scraper import ScrapeUsecase
 from slurp.usecases.worker import WorkerUsecase
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -22,9 +23,7 @@ def run_scraper_process():
     asyncio.run(ScrapeUsecase().run())
 
 
-def scraper(
-        workers: int = 1,
-):
+def scraper(workers: int = 1):
     """
     Runs the document scraper to produce tasks.
     """
@@ -39,16 +38,17 @@ def scraper(
         process.join()  # Wait for all scraper processes to complete
 
 
-
 def handle(generation):
     for qa in generation.question_answers:
         logger.info(f"""Q: {qa.question}
                 A: {qa.answer}
                    ---""")
 
+
 async def worker_main():
     usecase = WorkerUsecase()
     await consume_async_gen(usecase.run(), handle)
+
 
 def run_worker_process():
     """
@@ -58,9 +58,7 @@ def run_worker_process():
     asyncio.run(worker_main())
 
 
-def worker(
-        workers: int = 1,
-):
+def worker(workers: int = 1):
     """
     Runs the document worker to consume tasks.
     """
@@ -77,8 +75,8 @@ def worker(
 
 if __name__ == "__main__":
     # Use fork method for multiprocessing (Linux/macOS only)
-    multiprocessing.set_start_method('fork', force=True)
-    
+    multiprocessing.set_start_method("fork", force=True)
+
     parser = create_cli_parser()
     args = parser.parse_args()
 

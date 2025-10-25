@@ -1,21 +1,27 @@
 import random
+from bisect import bisect_right
 from collections import defaultdict
-from dataclasses import dataclass, asdict
-from typing import Iterable, Any, Coroutine, AsyncGenerator
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from typing import Any
 
-import orjson
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from slurp.adapters.asyncio import run_limited
-from slurp.domain.config import TokenConfig, GeneratorConfig, AppConfig
-from slurp.domain.models import TaskResult, FormatterDifficulties, Generation, QuestionSchema, \
-    AnswerSchema, QA
+from slurp.adapters.generators.prompts import de
+from slurp.adapters.generators.prompts import en
+from slurp.domain.config import GeneratorConfig
+from slurp.domain.config import TokenConfig
+from slurp.domain.models import QA
+from slurp.domain.models import AnswerSchema
+from slurp.domain.models import FormatterDifficulties
+from slurp.domain.models import Generation
+from slurp.domain.models import QuestionSchema
+from slurp.domain.models import TaskResult
 from slurp.domain.ports import GeneratorProtocol
-from bisect import bisect_right
-from slurp.adapters.generators.prompts import de, en
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 
 @dataclass
@@ -27,33 +33,29 @@ class LLMGenerator(GeneratorProtocol):
         if not self.token_config:
             raise ValueError("Token configuration must be provided for LLMFormatter.")
         if not self.config:
-            raise ValueError(
-                "Formatter configuration must be provided for LLMFormatter."
-            )
-        self.provider = OpenRouterProvider(
-            api_key=self.token_config.openrouter_api_key,
-        )
+            raise ValueError("Formatter configuration must be provided for LLMFormatter.")
+        self.provider = OpenRouterProvider(api_key=self.token_config.openrouter_api_key)
 
     @staticmethod
     def mixed_difficulty_distribution(
-            num_questions: int,
-            difficulties: tuple[str, ...] = (
-                    FormatterDifficulties.EASY,
-                    FormatterDifficulties.MEDIUM,
-                    FormatterDifficulties.HARD,
-            ),
-            weights: tuple[float, ...] = (0.3, 0.4, 0.3),
+        num_questions: int,
+        difficulties: tuple[str, ...] = (
+            FormatterDifficulties.EASY,
+            FormatterDifficulties.MEDIUM,
+            FormatterDifficulties.HARD,
+        ),
+        weights: tuple[float, ...] = (0.3, 0.4, 0.3),
     ) -> list[str]:
         return random.choices(difficulties, weights, k=num_questions)
 
     @staticmethod
     def balanced_difficulty_distribution(
-            num_questions: int,
-            difficulties: tuple[str, ...] = (
-                    FormatterDifficulties.EASY,
-                    FormatterDifficulties.MEDIUM,
-                    FormatterDifficulties.HARD,
-            ),
+        num_questions: int,
+        difficulties: tuple[str, ...] = (
+            FormatterDifficulties.EASY,
+            FormatterDifficulties.MEDIUM,
+            FormatterDifficulties.HARD,
+        ),
     ) -> list[str]:
         n = len(difficulties)
         if num_questions <= n:
@@ -76,48 +78,28 @@ class LLMGenerator(GeneratorProtocol):
     @staticmethod
     def create_chunks(content: str, chunk_size: int = 1000) -> list[str]:
         words = content.split()
-        return [
-            " ".join(words[i: i + chunk_size])
-            for i in range(0, len(words), chunk_size)
-        ]
+        return [" ".join(words[i : i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
-    async def make_request(
-            self,
-            prompt: str,
-            output_type: Any = str,
-            retries: int = 3,
-    ) -> Any:
+    async def make_request(self, prompt: str, output_type: Any = str, retries: int = 3) -> Any:
         """Make a request to OpenRouter API using OpenAI client."""
-        model = OpenAIModel(
-            model_name=self.config.model,
-            provider=self.provider,
-        )
-        agent = Agent(
-            model=model,
-            output_type=output_type,
-            retries=retries,
-        )
+        model = OpenAIModel(model_name=self.config.model, provider=self.provider)
+        agent = Agent(model=model, output_type=output_type, retries=retries)
         return await agent.run(user_prompt=prompt)
 
-    async def generate(
-            self,
-            res: TaskResult,
-            is_short: bool = True,
-    ) -> Generation | None:
+    async def generate(self, res: TaskResult, is_short: bool = True) -> Generation | None:
         """Normalize or clean bytes and return text."""
 
         levels, templates, translation = await self.get_templates(res, is_short=True)
 
         prompts = [
             templates.get(level, translation.MIXED_PROMPT).format(
-                title=res.title, content=res.content,
-            ) for level in levels
+                title=res.title, content=res.content
+            )
+            for level in levels
         ]
 
         qs: list[AgentRunResult[QuestionSchema] | Exception] = await run_limited(
-            *(
-                self.make_request(prompt=prompt, output_type=QuestionSchema) for prompt in prompts
-            ),
+            *(self.make_request(prompt=prompt, output_type=QuestionSchema) for prompt in prompts),
             limit=self.config.concurrency,
             return_exceptions=True,
         )
@@ -132,31 +114,28 @@ class LLMGenerator(GeneratorProtocol):
 
         answers: list[AgentRunResult[AnswerSchema] | Exception] = await run_limited(
             *(
-                self.make_request(prompt=translation.ANSWER_AND_CHUNKS_PROMPT.format(
-                    content=res.content,
-                    question=q
-                ), output_type=AnswerSchema) for q in qs
+                self.make_request(
+                    prompt=translation.ANSWER_AND_CHUNKS_PROMPT.format(
+                        content=res.content, question=q
+                    ),
+                    output_type=AnswerSchema,
+                )
+                for q in qs
             ),
             limit=self.config.concurrency,
             return_exceptions=True,
         )
 
-        qas = dict(zip(qs, answers))
+        qas = dict(zip(qs, answers, strict=False))
 
         # Filter out exceptions and empty results
         qas = [
             QA(q, a.output.answer, a.output.chunks)
             for q, a in qas.items()
-            if
-            not isinstance(a, Exception)
-            and isinstance(a.output, AnswerSchema)
+            if not isinstance(a, Exception) and isinstance(a.output, AnswerSchema)
         ]
 
-        return Generation(
-            question_answers=qas,
-            references=[res],
-            language=res.language,
-        )
+        return Generation(question_answers=qas, references=[res], language=res.language)
 
     async def get_templates(self, res: TaskResult, is_short: bool = True):
         n = self.num_questions(res.content)
@@ -177,19 +156,28 @@ class LLMGenerator(GeneratorProtocol):
         translation = all_templates.get(res.language, de)
 
         templates = {
-            FormatterDifficulties.EASY: translation.EASY_PxROMPT if is_short else translation.LONG_EASY_PROMPT,
-            FormatterDifficulties.MEDIUM: translation.MEDIUM_PROMPT if is_short else translation.LONG_MEDIUM_PROMPT,
-            FormatterDifficulties.HARD: translation.HARD_PROMPT if is_short else translation.LONG_HARD_PROMPT,
-            FormatterDifficulties.MIXED: translation.MIXED_PROMPT if is_short else translation.LONG_MIXED_PROMPT,
+            FormatterDifficulties.EASY: translation.EASY_PxROMPT
+            if is_short
+            else translation.LONG_EASY_PROMPT,
+            FormatterDifficulties.MEDIUM: translation.MEDIUM_PROMPT
+            if is_short
+            else translation.LONG_MEDIUM_PROMPT,
+            FormatterDifficulties.HARD: translation.HARD_PROMPT
+            if is_short
+            else translation.LONG_HARD_PROMPT,
+            FormatterDifficulties.MIXED: translation.MIXED_PROMPT
+            if is_short
+            else translation.LONG_MIXED_PROMPT,
         }
         return levels, templates, translation
 
-    async def generate_from_batch(self, *task_results: TaskResult) -> AsyncGenerator[Generation, None]:
+    async def generate_from_batch(
+        self, *task_results: TaskResult
+    ) -> AsyncGenerator[Generation, None]:
         """Normalize or clean bytes and yield Generation objects grouped by language."""
         if not task_results:
             return
 
-        from collections import defaultdict
         grouped: dict[str, list[TaskResult]] = defaultdict(list)
         for tr in task_results:
             grouped[tr.language].append(tr)
@@ -197,17 +185,17 @@ class LLMGenerator(GeneratorProtocol):
         all_templates = {"en": en, "de": de}
 
         for language, results in grouped.items():
-            lines = (
-                f'Document {r.title}: {r.content}'
-                for r in results
-            )
+            lines = (f"Document {r.title}: {r.content}" for r in results)
             combined_content = "\n".join(lines)
             translation = all_templates.get(language, de)
 
             prompts = [translation.CROSS_PAGE_PROMPT.format(combined_content=combined_content)]
 
             qs_raw = await run_limited(
-                *(self.make_request(prompt=prompt, output_type=QuestionSchema) for prompt in prompts),
+                *(
+                    self.make_request(prompt=prompt, output_type=QuestionSchema)
+                    for prompt in prompts
+                ),
                 limit=self.config.concurrency,
                 return_exceptions=True,
             )
@@ -223,10 +211,9 @@ class LLMGenerator(GeneratorProtocol):
                 *(
                     self.make_request(
                         prompt=translation.ANSWER_AND_CHUNKS_PROMPT.format(
-                            content=combined_content,
-                            question=q
+                            content=combined_content, question=q
                         ),
-                        output_type=AnswerSchema
+                        output_type=AnswerSchema,
                     )
                     for q in qs
                 ),
@@ -235,20 +222,18 @@ class LLMGenerator(GeneratorProtocol):
             )
             qas = [
                 QA(q, a.output.answer, a.output.chunks)
-                for q, a in zip(qs, answers_raw)
+                for q, a in zip(qs, answers_raw, strict=False)
                 if isinstance(a, AgentRunResult) and isinstance(a.output, AnswerSchema)
             ]
 
-            yield Generation(
-                question_answers=qas,
-                references=results,
-                language=language,
-            )
+            yield Generation(question_answers=qas, references=results, language=language)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
-    from slurp.domain.config import TokenConfig, GeneratorConfig
+
+    from slurp.domain.config import GeneratorConfig
+    from slurp.domain.config import TokenConfig
     from slurp.domain.models import TaskResult
 
     # Example configuration
@@ -257,7 +242,7 @@ if __name__ == '__main__':
         model="google/gemini-2.5-flash-preview-05-20",
         language="en",
         difficulty_ratio=FormatterDifficulties.EASY,
-        concurrency=5
+        concurrency=5,
     )
 
     # Create an instance of LLMFormatter
@@ -555,19 +540,16 @@ What are the current challenges we as a company are facing?
 •
 What are we currently trying to achieve?""",
         hash="sample-hash",
-        url="/spaces/PNC/pages/414220289/Onboarding+Overview+Schedule"
+        url="/spaces/PNC/pages/414220289/Onboarding+Overview+Schedule",
     )
 
     # Run the formatter and print results
     formatted_result = asyncio.run(formatter.generate(sample_result))
     print(formatted_result)
 
-
     async def main():
-
         async for gen in formatter.generate_from_batch(sample_result, sample_result):
             print(gen)
-
 
     formatted_result = asyncio.run(main())
     print(formatted_result)

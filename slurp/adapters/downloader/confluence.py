@@ -1,10 +1,10 @@
-import uuid
 from dataclasses import dataclass
 
 from atlassian import Confluence
 
 from slurp.domain.config import ConfluenceConfig
-from slurp.domain.models import Task, TaskResult
+from slurp.domain.models import Task
+from slurp.domain.models import TaskResult
 from slurp.domain.ports import DownloaderProtocol
 from slurp.hash import strhash
 
@@ -17,7 +17,7 @@ class ConfluenceDownloader(DownloaderProtocol):
     """
 
     config: ConfluenceConfig
-    client: Confluence = None
+    client: Confluence | None = None
 
     def __post_init__(self):
         self.client = Confluence(

@@ -1,5 +1,6 @@
 from textwrap import dedent
 
+
 EASY_PROMPT = dedent(
     """You are creating evaluation questions for a conversational RAG (Retrieval-Augmented Generation) system.
 
@@ -88,7 +89,7 @@ Document Title: {title}
 Document Content:
 {content}
 
-Generate ONE question that a user might naturally ask when seeking information that would be found in this type of document. 
+Generate ONE question that a user might naturally ask when seeking information that would be found in this type of document.
 
 ADAPTIVE DIFFICULTY:
 - For simple documents: Focus on factual questions and basic understanding
@@ -109,7 +110,7 @@ APPLICATION: "What should I do if [specific scenario]...", "How can I apply [spe
 SYNTHESIS: "What would happen if [specific condition]...", "How do [specific requirements] interact..."
 
 AVOID VAGUE REFERENCES - Always be specific:
-❌ "What should I do if this happens?" 
+❌ "What should I do if this happens?"
 ✅ "What should I do if the server crashes during deployment?"
 
 ❌ "How does this relate to that?"

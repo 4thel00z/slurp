@@ -15,8 +15,10 @@ class TokenConfig:
     @staticmethod
     def from_env() -> Optional["TokenConfig"]:
         openrouter_api_key = getenv("OPENROUTER_API_KEY")
+        if not openrouter_api_key:
+            return None
         try:
-            return TokenConfig( openrouter_api_key)
+            return TokenConfig(openrouter_api_key)
         except ValueError as err:
             print(f"Error creating TokenConfig: {err}")
             return None
@@ -44,13 +46,9 @@ class ConfluenceConfig:
     @staticmethod
     def add_to_parser(parser: argparse.ArgumentParser) -> None:
         """Add Confluence configuration arguments to the given parser."""
-        group = parser.add_argument_group('Confluence Options')
+        group = parser.add_argument_group("Confluence Options")
         group.add_argument(
-            "--confluence-space",
-            dest="space",
-            type=str,
-            default="",
-            help="Space key to operate on",
+            "--confluence-space", dest="space", type=str, default="", help="Space key to operate on"
         )
         group.add_argument(
             "--confluence-cloud/--no-confluence-cloud",
@@ -128,23 +126,19 @@ class ConfluenceConfig:
         )
 
     @staticmethod
-    def parse(
-        argv: list[str],
-    ):
+    def parse(argv: list[str]):
         parser = argparse.ArgumentParser(description="Confluence configuration parser")
         ConfluenceConfig.add_to_parser(parser)
         return parser.parse_known_args(argv)
 
     @staticmethod
-    def from_default(
-        argv: list[str] = None,
-    ) -> "ConfluenceConfig":
+    def from_default(argv: list[str] | None = None) -> "ConfluenceConfig":
         argv = argv if argv else sys.argv
         args, _ = ConfluenceConfig.parse(argv)
         return ConfluenceConfig(
-            base_url=args.base_url or getenv("CONFLUENCE_BASE_URL"),
-            username=args.username or getenv("CONFLUENCE_USERNAME"),
-            api_key=getenv("CONFLUENCE_API_KEY"),
+            base_url=args.base_url or getenv("CONFLUENCE_BASE_URL") or "",
+            username=args.username or getenv("CONFLUENCE_USERNAME") or "",
+            api_key=getenv("CONFLUENCE_API_KEY") or "",
             space=args.space,
             cloud=args.cloud,
             max_pages=args.max_pages,
@@ -166,7 +160,7 @@ class KafkaConfig:
     @staticmethod
     def add_to_parser(parser: argparse.ArgumentParser) -> None:
         """Add Kafka configuration arguments to the given parser."""
-        group = parser.add_argument_group('Kafka Options')
+        group = parser.add_argument_group("Kafka Options")
         group.add_argument(
             "--kafka-bootstrap-servers",
             dest="bootstrap_servers",
@@ -190,9 +184,7 @@ class KafkaConfig:
         )
 
     @staticmethod
-    def parse(
-        argv: list[str] = None,
-    ):
+    def parse(argv: list[str] | None = None):
         parser = argparse.ArgumentParser(description="Kafka configuration parser")
         KafkaConfig.add_to_parser(parser)
         return parser.parse_known_args(argv)
@@ -206,9 +198,7 @@ class KafkaConfig:
         )
 
     @staticmethod
-    def from_default(
-        argv: list[str] = None,
-    ) -> "KafkaConfig":
+    def from_default(argv: list[str] | None = None) -> "KafkaConfig":
         argv = argv if argv else sys.argv
         args, _ = KafkaConfig.parse(argv)
         defaults = KafkaConfig.from_env()
@@ -227,7 +217,7 @@ class SQLiteConfig:
     @staticmethod
     def add_to_parser(parser: argparse.ArgumentParser) -> None:
         """Add SQLite configuration arguments to the given parser."""
-        group = parser.add_argument_group('SQLite Options')
+        group = parser.add_argument_group("SQLite Options")
         group.add_argument(
             "--sqlite-database",
             dest="database",
@@ -244,7 +234,7 @@ class SQLiteConfig:
         )
 
     @staticmethod
-    def parse(argv: list[str] = None):
+    def parse(argv: list[str] | None = None):
         parser = argparse.ArgumentParser(add_help=False)
         SQLiteConfig.add_to_parser(parser)
         return parser.parse_known_args(argv)
@@ -257,13 +247,12 @@ class SQLiteConfig:
         )
 
     @staticmethod
-    def from_default(argv: list[str] = None) -> "SQLiteConfig":
+    def from_default(argv: list[str] | None = None) -> "SQLiteConfig":
         argv = argv or sys.argv
         args, _ = SQLiteConfig.parse(argv)
         defaults = SQLiteConfig.from_env()
         return SQLiteConfig(
-            database=args.database or defaults.database,
-            timeout=args.timeout or defaults.timeout,
+            database=args.database or defaults.database, timeout=args.timeout or defaults.timeout
         )
 
 
@@ -283,7 +272,7 @@ class GeneratorConfig:
     @staticmethod
     def add_to_parser(parser: argparse.ArgumentParser) -> None:
         """Add Generator configuration arguments to the given parser."""
-        group = parser.add_argument_group('Generator Options')
+        group = parser.add_argument_group("Generator Options")
         group.add_argument(
             "--generator-model",
             dest="model",
@@ -384,7 +373,7 @@ class GeneratorConfig:
 
 @dataclass
 class AppConfig:
-    token: TokenConfig
+    token: TokenConfig | None
     instrumentation: InstrumentationConfig
     confluence: ConfluenceConfig
     kafka: KafkaConfig
@@ -392,9 +381,7 @@ class AppConfig:
     sqlite: SQLiteConfig
 
     @staticmethod
-    def from_default(
-        argv: list[str],
-    ) -> "AppConfig":
+    def from_default(argv: list[str]) -> "AppConfig":
         return AppConfig(
             token=TokenConfig.from_env(),
             instrumentation=InstrumentationConfig.from_env().setup(),
@@ -415,40 +402,33 @@ def create_cli_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="Number of worker processes (default: 1)",
+        "--workers", type=int, default=1, help="Number of worker processes (default: 1)"
     )
-    
-    subparsers = parser.add_subparsers(
-        dest='command',
-        required=True,
-        help='Available commands',
-    )
-    
+
+    subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
+
     # Scraper subcommand
     scraper_parser = subparsers.add_parser(
-        'scraper',
-        help='Run the Confluence page scraper',
-        description='Discovers Confluence pages and submits them to Kafka queue',
+        "scraper",
+        help="Run the Confluence page scraper",
+        description="Discovers Confluence pages and submits them to Kafka queue",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ConfluenceConfig.add_to_parser(scraper_parser)
     KafkaConfig.add_to_parser(scraper_parser)
-    
-    # Worker subcommand  
+
+    # Worker subcommand
     worker_parser = subparsers.add_parser(
-        'worker',
-        help='Run the QA generation worker',
-        description='Processes pages from Kafka and generates Question-Answer pairs',
+        "worker",
+        help="Run the QA generation worker",
+        description="Processes pages from Kafka and generates Question-Answer pairs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ConfluenceConfig.add_to_parser(worker_parser)
     KafkaConfig.add_to_parser(worker_parser)
     GeneratorConfig.add_to_parser(worker_parser)
     SQLiteConfig.add_to_parser(worker_parser)
-    
+
     return parser
 
 
@@ -458,11 +438,6 @@ def parse_global_args(argv: list[str]) -> Namespace:
     (Deprecated: Use create_cli_parser() instead)
     """
     parser = argparse.ArgumentParser(description="Global configuration parser")
-    parser.add_argument(
-        "--workers",
-        type=int,
-        dest="workers",
-        default=1,
-    )
+    parser.add_argument("--workers", type=int, dest="workers", default=1)
     ns, _ = parser.parse_known_args(argv)
     return ns

@@ -1,21 +1,21 @@
-import asyncio
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from dataclasses import asdict
+from dataclasses import dataclass
 
 import orjson
-from dataclasses import dataclass, asdict
+
 
 logger = logging.getLogger(__name__)
 
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-from nltk.downloader import Downloader
+from aiokafka import AIOKafkaConsumer
+from aiokafka import AIOKafkaProducer
 
-from slurp.domain.ports import (
-    QueueSubmitterProtocol,
-    ConsumerProtocol,
-)
-from slurp.domain.models import Task, TaskResult
 from slurp.domain.config import KafkaConfig
+from slurp.domain.models import Task
+from slurp.domain.models import TaskResult
+from slurp.domain.ports import ConsumerProtocol
+from slurp.domain.ports import QueueSubmitterProtocol
 
 
 @dataclass
@@ -29,9 +29,7 @@ class KafkaQueueSubmitter(QueueSubmitterProtocol):
 
     def __post_init__(self):
         if not self.config.bootstrap_servers:
-            raise ValueError(
-                "Kafka bootstrap servers must be provided in the configuration."
-            )
+            raise ValueError("Kafka bootstrap servers must be provided in the configuration.")
         if not self.config.topic:
             raise ValueError("Kafka topic must be provided in the configuration.")
         if not self.config.client_id:
@@ -78,9 +76,7 @@ class KafkaConsumer(ConsumerProtocol):
 
     def __post_init__(self):
         if not self.config.bootstrap_servers:
-            raise ValueError(
-                "Kafka bootstrap servers must be provided in the configuration."
-            )
+            raise ValueError("Kafka bootstrap servers must be provided in the configuration.")
         if not self.config.topic:
             raise ValueError("Kafka topic must be provided in the configuration.")
         if not self.config.client_id:
@@ -95,7 +91,7 @@ class KafkaConsumer(ConsumerProtocol):
             group_id=f"{self.config.client_id}-group",
             value_deserializer=lambda val: Task(**orjson.loads(val)),
             enable_auto_commit=False,
-            auto_offset_reset='earliest'
+            auto_offset_reset="earliest",
         )
         logger.info("KafkaConsumer initialized.")
         logger.info("KafkaConsumer starting.")

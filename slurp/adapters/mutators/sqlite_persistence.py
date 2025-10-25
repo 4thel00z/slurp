@@ -1,13 +1,18 @@
 import asyncio
 from dataclasses import dataclass
 
-from sqlmodel import SQLModel, create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
+from sqlmodel import create_engine
 
 from slurp.domain.config import SQLiteConfig
-from slurp.domain.models import TaskResult, Generation, QA
-from slurp.domain.orm_models import TaskResultORM, GenerationORM
+from slurp.domain.models import QA
+from slurp.domain.models import Generation
+from slurp.domain.models import TaskResult
+from slurp.domain.orm_models import GenerationORM
+from slurp.domain.orm_models import TaskResultORM
 from slurp.domain.ports import TaskResultMutatorProtocol
 
 
@@ -17,9 +22,7 @@ class SqlitePersistence(TaskResultMutatorProtocol):
 
     def __post_init__(self):
         if not self.sqlite_config.database:
-            raise ValueError(
-                "SQLite database path must be provided in the configuration."
-            )
+            raise ValueError("SQLite database path must be provided in the configuration.")
 
         # async engine for runtime operations
         self.async_engine = create_async_engine(
@@ -39,15 +42,16 @@ class SqlitePersistence(TaskResultMutatorProtocol):
 
         # session factory
         self.make_session = sessionmaker(
-            self.async_engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
+            self.async_engine, class_=AsyncSession, expire_on_commit=False
         )
 
     async def __call__(self, response: TaskResult | Generation) -> TaskResult:
         async with self.make_session() as session:
-            ent = TaskResultORM.from_result(response) if isinstance(response, TaskResult) else GenerationORM.from_generation(
-                response)
+            ent = (
+                TaskResultORM.from_result(response)
+                if isinstance(response, TaskResult)
+                else GenerationORM.from_generation(response)
+            )
             session.add(ent)
             await session.commit()
         return response
@@ -55,6 +59,7 @@ class SqlitePersistence(TaskResultMutatorProtocol):
 
 if __name__ == "__main__":
     import asyncio
+
     from slurp.domain.config import SQLiteConfig
     from slurp.domain.models import TaskResult
 
@@ -73,15 +78,19 @@ if __name__ == "__main__":
     )
 
     generation_sample = Generation(
-        question_answers=[QA("What is the capital of France?", "Paris", ["Paris is the capital of France."])],
-        references=[TaskResult(
-            status_code=200,
-            headers={"X-Example": "true"},
-            content="Hello, world!",
-            hash="example-hash",
-            url="http://example.com",
-            title="Example Title",
-        )],
+        question_answers=[
+            QA("What is the capital of France?", "Paris", ["Paris is the capital of France."])
+        ],
+        references=[
+            TaskResult(
+                status_code=200,
+                headers={"X-Example": "true"},
+                content="Hello, world!",
+                hash="example-hash",
+                url="http://example.com",
+                title="Example Title",
+            )
+        ],
     )
 
     # run persistence and print result

@@ -3,6 +3,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 
 from selectolax.parser import HTMLParser as SelectolaxHTMLParser
+
 from slurp.domain.models import TaskResult
 from slurp.domain.ports import TaskResultMutatorProtocol
 
@@ -13,11 +14,7 @@ class HTMLParser(TaskResultMutatorProtocol):
 
     async def __call__(self, result: TaskResult) -> TaskResult:
         loop = asyncio.get_running_loop()
-        text = await loop.run_in_executor(
-            self.executor,
-            self.parse,
-            result.content
-        )
+        text = await loop.run_in_executor(self.executor, self.parse, result.content)
         return TaskResult(
             title=result.title,
             status_code=result.status_code,
@@ -87,6 +84,5 @@ if __name__ == "__main__":
             content = out.content
             assert expected in content, f"Expected '{expected}' in '{content}'"
             print(f"PASS: {html!r} -> {content!r}")
-
 
     asyncio.run(main())
