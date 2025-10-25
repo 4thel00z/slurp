@@ -6,7 +6,7 @@
 
 ### Cross-Document RAG Dataset Generator
 
-A comprehensive tool for generating RAG (Retrieval-Augmented Generation) datasets from Confluence pages (more sources planned).
+A comprehensive tool for generating RAG (Retrieval-Augmented Generation) eval datasets from Confluence pages (more sources planned).
 
 [![CI](https://github.com/4thel00z/slurp/workflows/CI/badge.svg)](https://github.com/4thel00z/slurp/actions)
 [![CodeQL](https://github.com/4thel00z/slurp/workflows/CodeQL%20Security%20Scan/badge.svg)](https://github.com/4thel00z/slurp/actions)
