@@ -1,6 +1,21 @@
-# Slurp - Multi turn RAG Dataset Generator
+<div align="center">
+
+<img src="logo.jpeg" alt="Slurp Logo" width="400"/>
+
+# 🌊 Slurp
+
+### Multi-turn RAG Dataset Generator
 
 A comprehensive tool for generating RAG (Retrieval-Augmented Generation) datasets from Confluence pages (more sources planned).
+
+[![CI](https://github.com/4thel00z/slurp/workflows/CI/badge.svg)](https://github.com/4thel00z/slurp/actions)
+[![CodeQL](https://github.com/4thel00z/slurp/workflows/CodeQL%20Security%20Scan/badge.svg)](https://github.com/4thel00z/slurp/actions)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
+</div>
+
+---
 This system uses a distributed architecture with Kafka for task queue management, separate scraper and worker processes, and supports both batch and streaming processing.
 
 ## Architecture
