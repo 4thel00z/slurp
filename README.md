@@ -1,6 +1,7 @@
-# Slurp - Confluence RAG Dataset Generator
+# Slurp - Multi turn RAG Dataset Generator
 
-A comprehensive tool for generating RAG (Retrieval-Augmented Generation) datasets from Confluence pages. This system uses a distributed architecture with Kafka for task queue management, separate scraper and worker processes, and supports both batch and streaming processing.
+A comprehensive tool for generating RAG (Retrieval-Augmented Generation) datasets from Confluence pages (more sources planned).
+This system uses a distributed architecture with Kafka for task queue management, separate scraper and worker processes, and supports both batch and streaming processing.
 
 ## Architecture
 
