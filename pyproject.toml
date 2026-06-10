@@ -13,6 +13,10 @@ dependencies = [
     "selectolax>=0.3.0",
     "nltk>=3.8.0",
     "sqlalchemy>=2.0.0",
+    # SQLAlchemy's async engine (sqlite+aiosqlite) requires greenlet, but
+    # SQLAlchemy only declares it under platform markers that exclude arm64
+    # macOS, so it must be requested explicitly or async DB writes break.
+    "greenlet>=3.0.0",
     "sqlmodel>=0.0.14",
     "fastapi>=0.109.0",
     "logfire>=0.28.0",
