@@ -152,6 +152,59 @@ class ConfluenceConfig:
 
 
 @dataclass
+class LocalConfig:
+    path: str = ""
+    glob: str = "**/*"
+    extensions: str = ".md,.html,.txt"
+    enabled: bool = True
+
+    def extension_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.extensions.split(",") if e.strip()]
+
+    @staticmethod
+    def add_to_parser(parser: argparse.ArgumentParser) -> None:
+        """Add local file connector arguments to the given parser."""
+        group = parser.add_argument_group("Local Options")
+        group.add_argument(
+            "--local-path",
+            dest="local_path",
+            type=str,
+            default="",
+            help="File or directory of local documents to ingest",
+        )
+        group.add_argument(
+            "--local-glob",
+            dest="local_glob",
+            type=str,
+            default="**/*",
+            help="Glob pattern applied when --local-path is a directory (default: **/*)",
+        )
+        group.add_argument(
+            "--local-extensions",
+            dest="local_extensions",
+            type=str,
+            default=".md,.html,.txt",
+            help="Comma-separated file extensions to include (default: .md,.html,.txt)",
+        )
+
+    @staticmethod
+    def parse(argv: list[str] | None = None):
+        parser = argparse.ArgumentParser(add_help=False)
+        LocalConfig.add_to_parser(parser)
+        return parser.parse_known_args(argv)
+
+    @staticmethod
+    def from_default(argv: list[str] | None = None) -> "LocalConfig":
+        argv = argv if argv else sys.argv
+        args, _ = LocalConfig.parse(argv)
+        return LocalConfig(
+            path=args.local_path or getenv("LOCAL_PATH") or "",
+            glob=args.local_glob or getenv("LOCAL_GLOB") or "**/*",
+            extensions=args.local_extensions or getenv("LOCAL_EXTENSIONS") or ".md,.html,.txt",
+        )
+
+
+@dataclass
 class KafkaConfig:
     bootstrap_servers: str = "localhost:19092"
     topic: str = "tasks"
@@ -371,6 +424,29 @@ class GeneratorConfig:
         )
 
 
+CONNECTORS = ("local", "confluence")
+DEFAULT_CONNECTOR = "local"
+
+
+def parse_connector(argv: list[str] | None = None) -> str:
+    argv = argv if argv else sys.argv
+    parser = argparse.ArgumentParser(add_help=False)
+    add_connector_arg(parser)
+    args, _ = parser.parse_known_args(argv)
+    return args.connector or getenv("CONNECTOR") or DEFAULT_CONNECTOR
+
+
+def add_connector_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--connector",
+        dest="connector",
+        type=str,
+        choices=CONNECTORS,
+        default=DEFAULT_CONNECTOR,
+        help=f"Which source connector the scraper uses (default: {DEFAULT_CONNECTOR})",
+    )
+
+
 @dataclass
 class AppConfig:
     token: TokenConfig | None
@@ -379,6 +455,8 @@ class AppConfig:
     kafka: KafkaConfig
     generator: GeneratorConfig
     sqlite: SQLiteConfig
+    local: LocalConfig
+    connector: str
 
     @staticmethod
     def from_default(argv: list[str]) -> "AppConfig":
@@ -389,6 +467,8 @@ class AppConfig:
             kafka=KafkaConfig.from_default(argv=argv),
             generator=GeneratorConfig.from_args(args=argv),
             sqlite=SQLiteConfig.from_default(argv=argv),
+            local=LocalConfig.from_default(argv=argv),
+            connector=parse_connector(argv),
         )
 
 
@@ -414,7 +494,9 @@ def create_cli_parser() -> argparse.ArgumentParser:
         description="Discovers Confluence pages and submits them to Kafka queue",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    add_connector_arg(scraper_parser)
     ConfluenceConfig.add_to_parser(scraper_parser)
+    LocalConfig.add_to_parser(scraper_parser)
     KafkaConfig.add_to_parser(scraper_parser)
 
     # Worker subcommand
@@ -424,7 +506,9 @@ def create_cli_parser() -> argparse.ArgumentParser:
         description="Processes pages from Kafka and generates Question-Answer pairs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    add_connector_arg(worker_parser)
     ConfluenceConfig.add_to_parser(worker_parser)
+    LocalConfig.add_to_parser(worker_parser)
     KafkaConfig.add_to_parser(worker_parser)
     GeneratorConfig.add_to_parser(worker_parser)
     SQLiteConfig.add_to_parser(worker_parser)

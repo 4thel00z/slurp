@@ -64,24 +64,54 @@ export SQLITE_DATABASE="./data.db"
 
 ## Usage
 
+### Connectors
+
+Slurp ingests content through pluggable **connectors**, selected with
+`--connector`. The default is `local`.
+
+| Connector    | Source                         | Requires                          |
+|--------------|--------------------------------|-----------------------------------|
+| `local`      | Files on disk (`.md/.html/.txt`) | nothing (no Confluence creds)     |
+| `confluence` | A Confluence space             | `CONFLUENCE_*` credentials        |
+
+Both connectors still flow through Kafka and the LLM generator, so a broker
+(`infra/docker-compose.yaml`) and `OPENROUTER_API_KEY` are required either way.
+
+#### Local files (default)
+
+```bash
+# Scrape a directory of documents into the queue
+python -m slurp scraper --local-path ./docs
+
+# Only markdown files
+python -m slurp scraper --local-path ./docs --local-extensions .md
+
+# A single file
+python -m slurp scraper --local-path ./docs/intro.md
+
+# Then run the worker (it dispatches on each task's connector automatically)
+python -m slurp worker --generator-batch-size 1
+```
+
 ### Distributed System (Production Mode)
 
 #### Running the Scraper
 
-The scraper discovers Confluence pages and submits them to Kafka:
+The scraper discovers Confluence pages and submits them to Kafka
+(note the explicit `--connector confluence`, since `local` is the default):
 
 ```bash
 # Scrape up to 50 pages from a Confluence space
-python -m slurp scraper --confluence-space RESEARCH --confluence-max-pages 50
+python -m slurp scraper --connector confluence --confluence-space RESEARCH --confluence-max-pages 50
 
 # Filter by recent pages (last 3 months)
-python -m slurp scraper --confluence-space RESEARCH --confluence-months-back 3
+python -m slurp scraper --connector confluence --confluence-space RESEARCH --confluence-months-back 3
 
 # Skip the first 100 pages
-python -m slurp scraper --confluence-space RESEARCH --confluence-skip 100
+python -m slurp scraper --connector confluence --confluence-space RESEARCH --confluence-skip 100
 
 # Run multiple scraper workers
-python -m slurp scraper --workers 2 --confluence-space RESEARCH
+python -m slurp scraper --workers 2 --connector confluence --confluence-space RESEARCH
 ```
 
 #### Running the Worker
