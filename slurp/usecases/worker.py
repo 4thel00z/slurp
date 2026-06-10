@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from dataclasses import field
 
 from slurp.adapters.downloader.confluence import ConfluenceDownloader
+from slurp.adapters.downloader.local import LocalDownloader
+from slurp.adapters.downloader.registry import DownloaderRegistry
 from slurp.adapters.generators.llm import LLMGenerator
 from slurp.adapters.kafka import KafkaConsumer
 from slurp.adapters.mutators.html_parser import HTMLParser
@@ -31,7 +33,14 @@ class WorkerUsecase:
 
         # initialize protocols
         self.consumer = KafkaConsumer(self.app_config.kafka)
-        self.downloader = ConfluenceDownloader(self.app_config.confluence)
+        # downloaders are dispatched by task.downloader and built lazily, so
+        # local-only runs never construct the Confluence client.
+        self.downloaders = DownloaderRegistry(
+            {
+                "confluence": lambda: ConfluenceDownloader(self.app_config.confluence),
+                "local": lambda: LocalDownloader(self.app_config.local),
+            }
+        )
         self.persistence = SqlitePersistence(sqlite_config=self.app_config.sqlite)
         # mutators: HTML parsing then persistence
         self.mutators = [self.consumer.acknowledge, HTMLParser(), self.persistence]
@@ -85,7 +94,13 @@ class WorkerUsecase:
                 logger.info(
                     f"Processing task: {task.idempotency_key} with downloader: {task.downloader}"
                 )
-                result = await self.downloader(task)
+                downloader = self.downloaders.get(task.downloader)
+                if downloader is None:
+                    logger.warning(
+                        f"No downloader registered for '{task.downloader}', skipping task."
+                    )
+                    continue
+                result = await downloader(task)
                 if not result:
                     continue
                 logger.info(
