@@ -44,12 +44,15 @@ class WorkerUsecase:
         self.persistence = SqlitePersistence(sqlite_config=self.app_config.sqlite)
         # mutators: HTML parsing then persistence
         self.mutators = [self.consumer.acknowledge, HTMLParser(), self.persistence]
-        # formatter for question/answer generation
-        self.generator = LLMGenerator(
-            token_config=self.app_config.token, config=self.app_config.generator
-        )
-        if not self.generator:
-            logger.warning("No generator configured, skipping generation step.")
+        # formatter for question/answer generation; only built when enabled so the
+        # worker can run the download/parse/persist path without an LLM token.
+        self.generator = None
+        if self.app_config.generator.enabled:
+            self.generator = LLMGenerator(
+                token_config=self.app_config.token, config=self.app_config.generator
+            )
+        else:
+            logger.warning("Generator disabled, skipping QA generation step.")
         self.generation_mutators = [self.persistence]
 
     async def process(self, result: TaskResult) -> AsyncIterator[Generation]:
