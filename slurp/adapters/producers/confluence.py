@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from asyncio import get_running_loop
 from collections.abc import AsyncGenerator
 from collections.abc import Callable
@@ -11,6 +12,9 @@ from functools import partial
 from uuid import uuid4
 
 from atlassian import Confluence
+
+
+logger = logging.getLogger(__name__)
 
 from slurp.adapters.asyncio import flatten_lazy
 from slurp.domain.config import ConfluenceConfig
@@ -48,12 +52,12 @@ class ConfluenceProducer(ProducerProtocol):
             )
 
             if not last_modified:
-                print(f"    ⚠️  Could not determine last modified date for page {page.get('id')}")
-                print(f"        Available date fields: {list(page.keys())}")
+                logger.debug("Could not determine last modified date for page %s", page.get("id"))
+                logger.debug("Available date fields: %s", list(page.keys()))
                 if "version" in page:
-                    print(f"        Version fields: {list(page['version'].keys())}")
+                    logger.debug("Version fields: %s", list(page["version"].keys()))
                 if "history" in page:
-                    print(f"        History fields: {list(page['history'].keys())}")
+                    logger.debug("History fields: %s", list(page["history"].keys()))
                 return True
 
             try:
@@ -65,14 +69,18 @@ class ConfluenceProducer(ProducerProtocol):
                     else last_modified
                 )
             except (ValueError, TypeError) as e:
-                print(f"    ⚠️  Error parsing date '{last_modified}' for page {page.get('id')}: {e}")
+                logger.warning(
+                    "Error parsing date %r for page %s: %s", last_modified, page.get("id"), e
+                )
                 return True
 
             cutoff = datetime.now(modified_date.tzinfo) - timedelta(days=months_back * 30)
             if modified_date < cutoff:
-                print(
-                    f"    ⏰ Skipping page '{page.get('title', 'Unknown')}' - "
-                    f"last modified {modified_date:%Y-%m-%d} (older than {months_back} months)"
+                logger.debug(
+                    "Skipping page %r - last modified %s (older than %s months)",
+                    page.get("title", "Unknown"),
+                    modified_date.strftime("%Y-%m-%d"),
+                    months_back,
                 )
                 return False
 
@@ -86,42 +94,44 @@ class ConfluenceProducer(ProducerProtocol):
     def fetch_page(
         self, offset: int, limit: int, expand="version,history,lastModified"
     ) -> list[dict]:
-        """
-        Fetch a batch of pages from Confluence.
-        This method is used to fetch pages in batches based on the offset and limit.
-        """
-        return (
-            self.client.get_all_pages_from_space_raw(
+        """Fetch a batch of pages from Confluence; return [] on API error."""
+        try:
+            raw = self.client.get_all_pages_from_space_raw(
                 space=self.config.space, start=offset, limit=limit, expand=expand
             )
-            or {}
-        ).get("results", [])
+        except Exception:
+            logger.warning(
+                "Confluence fetch failed (space=%s offset=%s)",
+                self.config.space,
+                offset,
+                exc_info=True,
+            )
+            return []
+        return (raw or {}).get("results", [])
 
     async def __call__(self) -> AsyncGenerator[Task, None]:
         loop = get_running_loop()
-        executor = ThreadPoolExecutor(max_workers=self.config.concurrency)
-        fetchers = (
-            loop.run_in_executor(
-                executor,
-                partial(
-                    self.fetch_page,
-                    offset=offset,
-                    limit=min(self.config.page_batch_size, self.config.max_pages - offset),
-                    expand="version,history,lastModified",
-                ),
+        with ThreadPoolExecutor(max_workers=self.config.concurrency) as executor:
+            fetchers = (
+                loop.run_in_executor(
+                    executor,
+                    partial(
+                        self.fetch_page,
+                        offset=offset,
+                        limit=min(self.config.page_batch_size, self.config.max_pages - offset),
+                        expand="version,history,lastModified",
+                    ),
+                )
+                for offset in range(
+                    self.config.skip,
+                    self.config.max_pages + self.config.skip,
+                    self.config.page_batch_size,
+                )
             )
-            for offset in range(
-                self.config.skip,
-                self.config.max_pages + self.config.skip,
-                self.config.page_batch_size,
-            )
-        )
-        flat_results = flatten_lazy(await asyncio.gather(*fetchers))
+            flat_results = list(flatten_lazy(await asyncio.gather(*fetchers)))
 
         predicate = self.months_back_predicate(self.config.months_back)
-        filtered_results = filter(predicate, flat_results)
-
-        for page in filtered_results:
+        for page in filter(predicate, flat_results):
             page: ConfluencePage
             task = Task(
                 title=page.get("title"),
