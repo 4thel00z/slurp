@@ -15,6 +15,7 @@ from slurp.adapters.mutators.sqlite_persistence import SqlitePersistence
 from slurp.domain.config import AppConfig
 from slurp.domain.models import Generation
 from slurp.domain.models import TaskResult
+from slurp.domain.validation import validate_app_config
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class WorkerUsecase:
     def __post_init__(self):
         # load all configuration from environment/args
         self.app_config = AppConfig.from_default(sys.argv)
+        validate_app_config(self.app_config)
         if self.app_config.instrumentation:
             self.app_config.instrumentation.setup()
         logger.info("WorkerUsecase initialized.")

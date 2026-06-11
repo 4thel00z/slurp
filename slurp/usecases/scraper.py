@@ -10,6 +10,7 @@ from slurp.adapters.producers.local import LocalProducer
 from slurp.domain.config import AppConfig
 from slurp.domain.ports import ProducerProtocol
 from slurp.domain.ports import QueueSubmitterProtocol
+from slurp.domain.validation import validate_app_config
 
 
 @dataclass
@@ -20,6 +21,7 @@ class ScrapeUsecase:
 
     def __post_init__(self):
         self.app_config = AppConfig.from_default(sys.argv)
+        validate_app_config(self.app_config)
         if self.app_config.instrumentation:
             self.app_config.instrumentation.setup()
 
