@@ -62,6 +62,23 @@ export KAFKA_TOPIC="tasks"
 export SQLITE_DATABASE="./data.db"
 ```
 
+### LLM provider
+
+The QA generator talks to any **OpenAI-compatible** endpoint, selected by
+`--generator-base-url` and an API key. The key is read from `LLM_API_KEY`
+(falling back to `OPENROUTER_API_KEY` for backwards compatibility).
+
+```bash
+# Default: OpenRouter
+export OPENROUTER_API_KEY="your-openrouter-key"
+
+# Any other OpenAI-compatible endpoint
+export LLM_API_KEY="$(your-token-command)"   # or a static key
+python -m slurp worker \
+  --generator-base-url https://your-llm-endpoint.example/v1 \
+  --generator-model your-model
+```
+
 ## Usage
 
 ### Connectors
@@ -91,6 +108,23 @@ python -m slurp scraper --local-path ./docs/intro.md
 
 # Then run the worker (it dispatches on each task's connector automatically)
 python -m slurp worker --generator-batch-size 1
+```
+
+### Live dataset view
+
+```bash
+# Serve an auto-refreshing HTML view of the generated QA pairs (default :8077)
+python -m slurp render --open --sqlite-database ./data.db
+```
+
+The page polls the SQLite `generations` table, so QA pairs appear as the worker
+produces them.
+
+### Slurp skill (for Claude Code)
+
+```bash
+python -m slurp skill            # print the bundled SKILL.md
+python -m slurp skill --install  # write it to ./.claude/skills/slurp/SKILL.md
 ```
 
 ### Distributed System (Production Mode)

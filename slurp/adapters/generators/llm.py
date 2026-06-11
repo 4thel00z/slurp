@@ -8,7 +8,7 @@ from typing import Any
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from slurp.adapters.asyncio import run_limited
 from slurp.adapters.generators.prompts import de
@@ -34,7 +34,11 @@ class LLMGenerator(GeneratorProtocol):
             raise ValueError("Token configuration must be provided for LLMFormatter.")
         if not self.config:
             raise ValueError("Formatter configuration must be provided for LLMFormatter.")
-        self.provider = OpenRouterProvider(api_key=self.token_config.openrouter_api_key)
+        # Generic OpenAI-compatible provider: works for OpenRouter and for any
+        # other endpoint by pointing base_url at it.
+        self.provider = OpenAIProvider(
+            base_url=self.config.base_url, api_key=self.token_config.api_key
+        )
 
     @staticmethod
     def mixed_difficulty_distribution(
@@ -156,7 +160,7 @@ class LLMGenerator(GeneratorProtocol):
         translation = all_templates.get(res.language, de)
 
         templates = {
-            FormatterDifficulties.EASY: translation.EASY_PxROMPT
+            FormatterDifficulties.EASY: translation.EASY_PROMPT
             if is_short
             else translation.LONG_EASY_PROMPT,
             FormatterDifficulties.MEDIUM: translation.MEDIUM_PROMPT
