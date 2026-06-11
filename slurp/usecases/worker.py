@@ -43,7 +43,8 @@ class WorkerUsecase:
         )
         self.persistence = SqlitePersistence(sqlite_config=self.app_config.sqlite)
         # mutators: HTML parsing then persistence
-        self.mutators = [self.consumer.acknowledge, HTMLParser(), self.persistence]
+        self.html_parser = HTMLParser()
+        self.mutators = [self.consumer.acknowledge, self.html_parser, self.persistence]
         # formatter for question/answer generation; only built when enabled so the
         # worker can run the download/parse/persist path without an LLM token.
         self.generator = None
@@ -92,68 +93,72 @@ class WorkerUsecase:
         results: list[TaskResult] = []
 
         logger.info("Starting worker run loop.")
-        async with self.consumer:
-            async for task in self.consumer():
-                logger.info(
-                    f"Processing task: {task.idempotency_key} with downloader: {task.downloader}"
-                )
-                downloader = self.downloaders.get(task.downloader)
-                if downloader is None:
-                    logger.warning(
-                        f"No downloader registered for '{task.downloader}', skipping task."
-                    )
-                    continue
-                result = await downloader(task)
-                if not result:
-                    continue
-                logger.info(
-                    f"Finished downloading task: {task.idempotency_key}. Result: {result.content[:100]}..."
-                )
-
-                # apply mutators
-                for mut in self.mutators:
+        try:
+            async with self.consumer:
+                async for task in self.consumer():
                     logger.info(
-                        f"Applying mutator: {mut.__class__.__name__} to task: {task.idempotency_key}"
+                        f"Processing task: {task.idempotency_key} with downloader: {task.downloader}"
                     )
-                    result = await mut(result)
+                    downloader = self.downloaders.get(task.downloader)
+                    if downloader is None:
+                        logger.warning(
+                            f"No downloader registered for '{task.downloader}', skipping task."
+                        )
+                        continue
+                    result = await downloader(task)
                     if not result:
-                        break
+                        continue
+                    logger.info(
+                        f"Finished downloading task: {task.idempotency_key}. Result: {result.content[:100]}..."
+                    )
 
-                if not result:
-                    logger.info(f"No result for task: {task.idempotency_key}")
-                    continue
+                    # apply mutators
+                    for mut in self.mutators:
+                        logger.info(
+                            f"Applying mutator: {mut.__class__.__name__} to task: {task.idempotency_key}"
+                        )
+                        result = await mut(result)
+                        if not result:
+                            break
 
-                logger.info(
-                    f"Finished mutating task: {task.idempotency_key}. Result: {result.content[:100]}..."
-                )
-                results.append(result)
-                # single-item mode
+                    if not result:
+                        logger.info(f"No result for task: {task.idempotency_key}")
+                        continue
+
+                    logger.info(
+                        f"Finished mutating task: {task.idempotency_key}. Result: {result.content[:100]}..."
+                    )
+                    results.append(result)
+                    # single-item mode
+                    if batch_size <= 1:
+                        # flush single immediately
+                        current = results.pop(0)
+                        async for g in self.process(current):
+                            yield g
+                        continue
+
+                    # batch mode flush when full
+                    if len(results) >= batch_size:
+                        async for g in self.process_batch(results):
+                            yield g
+                        results.clear()
+
+                # final flush of leftovers
+                if not results:
+                    return
+
                 if batch_size <= 1:
-                    # flush single immediately
                     current = results.pop(0)
                     async for g in self.process(current):
                         yield g
-                    continue
-
-                # batch mode flush when full
-                if len(results) >= batch_size:
+                else:
                     async for g in self.process_batch(results):
                         yield g
+                    logger.info(f"Flushed final batch of {len(results)} results.")
                     results.clear()
-
-            # final flush of leftovers
-            if not results:
-                return
-
-            if batch_size <= 1:
-                current = results.pop(0)
-                async for g in self.process(current):
-                    yield g
-            else:
-                async for g in self.process_batch(results):
-                    yield g
-                logger.info(f"Flushed final batch of {len(results)} results.")
-                results.clear()
+        finally:
+            self.html_parser.shutdown()
+            await self.persistence.aclose()
 
 
 if __name__ == "__main__":
