@@ -1,6 +1,10 @@
+import logging
 from dataclasses import dataclass
 
 from atlassian import Confluence
+
+
+logger = logging.getLogger(__name__)
 
 from slurp.domain.config import ConfluenceConfig
 from slurp.domain.models import Task
@@ -29,17 +33,15 @@ class ConfluenceDownloader(DownloaderProtocol):
         )
 
     async def __call__(self, task: Task) -> TaskResult | None:
-        """
-        Process the Confluence task.
-        This method should be implemented to handle the specific logic for consuming a Confluence task.
-        """
-        # Placeholder for actual implementation
-        print(f"Consuming task: {task}")
         if task.downloader != "confluence":
-            print("⚠️  This task is not for Confluence consumer.")
+            logger.warning("Task %s is not for the Confluence downloader.", task.idempotency_key)
             return None
 
-        res = self.client.get_page_by_id(task.url, expand="body.storage,body.view")
+        try:
+            res = self.client.get_page_by_id(task.url, expand="body.storage,body.view")
+        except Exception:
+            logger.warning("Confluence download failed for %s", task.url, exc_info=True)
+            return None
 
         if not res.ok:
             return TaskResult(
@@ -54,14 +56,17 @@ class ConfluenceDownloader(DownloaderProtocol):
                 language=task.language,
             )
 
-        page = res.json()
+        try:
+            page = res.json()
+        except ValueError:
+            logger.warning("Confluence returned non-JSON body for %s", task.url)
+            return None
 
         if not page:
-            print(f"⚠️  Failed to get content for page {task.url}")
+            logger.warning("Empty Confluence content for page %s", task.url)
             return None
 
         body_html = page.get("body", {}).get("view", {}).get("value", "")
-
         return TaskResult(
             title=task.title,
             url=task.url,
