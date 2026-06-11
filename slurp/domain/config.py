@@ -1,10 +1,13 @@
 import argparse
+import logging
 import sys
 from dataclasses import dataclass
 from os import getenv
-from typing import Optional
 
 from slurp.adapters.instrumentation import InstrumentationConfig
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -12,7 +15,7 @@ class TokenConfig:
     api_key: str
 
     @staticmethod
-    def from_env() -> Optional["TokenConfig"]:
+    def from_env() -> "TokenConfig | None":
         # Generic key for any OpenAI-compatible endpoint, falling back to the
         # OpenRouter key for backward compatibility.
         api_key = getenv("LLM_API_KEY") or getenv("OPENROUTER_API_KEY")
@@ -21,7 +24,7 @@ class TokenConfig:
         try:
             return TokenConfig(api_key)
         except ValueError as err:
-            print(f"Error creating TokenConfig: {err}")
+            logger.error("Error creating TokenConfig: %s", err)
             return None
 
     def __post_init__(self):
@@ -459,7 +462,7 @@ class AppConfig:
     def from_default(argv: list[str]) -> "AppConfig":
         return AppConfig(
             token=TokenConfig.from_env(),
-            instrumentation=InstrumentationConfig.from_env().setup(),
+            instrumentation=InstrumentationConfig.from_env(),
             confluence=ConfluenceConfig.from_default(argv=argv),
             kafka=KafkaConfig.from_default(argv=argv),
             generator=GeneratorConfig.from_args(args=argv),

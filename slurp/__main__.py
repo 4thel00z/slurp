@@ -36,7 +36,7 @@ def scraper(workers: int = 1):
 
     processes = []
     for i in range(workers):
-        print(f"Starting scraper process {i + 1}/{workers}")
+        logger.info("Starting scraper process %d/%d", i + 1, workers)
         process = Process(target=run_scraper_process)
         processes.append(process)
         process.start()
@@ -81,7 +81,7 @@ def worker(workers: int = 1):
 
     processes = []
     for i in range(workers):
-        print(f"Starting worker process {i + 1}/{workers}")
+        logger.info("Starting worker process %d/%d", i + 1, workers)
         process = Process(target=run_worker_process)
         processes.append(process)
         process.start()
@@ -111,5 +111,5 @@ if __name__ == "__main__":
 
             run_skill(install=args.install, base_dir=args.base_dir)
         case _:
-            print(f"Unknown command: {args.command}")
+            logger.error("Unknown command: %s", args.command)
             sys.exit(os.EX_USAGE)

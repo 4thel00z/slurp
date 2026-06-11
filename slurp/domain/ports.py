@@ -56,8 +56,8 @@ class TaskResultMutatorProtocol(Protocol):
 
 @runtime_checkable
 class GeneratorProtocol(Protocol):
-    async def generate(self, task_result: TaskResult) -> Generation:
-        """Normalize or clean bytes and return text."""
+    async def generate(self, task_result: TaskResult) -> Generation | None:
+        """Generate QA pairs; return None when nothing could be generated."""
         ...
 
     async def generate_from_batch(self, *task_results: TaskResult) -> AsyncIterable[Generation]:

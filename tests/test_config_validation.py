@@ -47,8 +47,7 @@ def test_token_not_required_when_generator_disabled():
 
 def test_confluence_connector_requires_credentials():
     cfg = _app_config(
-        connector="confluence",
-        confluence=ConfluenceConfig(username="", api_key="", space=""),
+        connector="confluence", confluence=ConfluenceConfig(username="", api_key="", space="")
     )
     with pytest.raises(ConfigError) as ei:
         validate_app_config(cfg)
@@ -60,7 +59,7 @@ def test_out_of_bounds_values_aggregate():
     cfg = _app_config(
         generator=GeneratorConfig(
             language="en", model="m", concurrency=0, temperature=5.0, max_tokens=0, batch_size=0
-        ),
+        )
     )
     with pytest.raises(ConfigError) as ei:
         validate_app_config(cfg)

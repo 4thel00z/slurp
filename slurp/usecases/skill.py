@@ -1,7 +1,12 @@
 """The bundled slurp skill (a Claude Code SKILL.md) and its install helper."""
 
+import logging
+import sys
 from importlib.resources import files
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 def skill_text() -> str:
@@ -23,6 +28,6 @@ def install_skill(base_dir: str = ".") -> str:
 def run(install: bool, base_dir: str = ".") -> None:
     if install:
         path = install_skill(base_dir)
-        print(f"Installed slurp skill to {path}")
+        logger.info("Installed slurp skill to %s", path)
     else:
-        print(skill_text())
+        sys.stdout.write(skill_text() + "\n")

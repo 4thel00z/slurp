@@ -195,13 +195,13 @@ class RenderUsecase:
     def run(self) -> None:
         server = ThreadingHTTPServer((self.host, self.port), _make_handler(self.config.database))
         url = f"http://{self.host}:{self.port}/"
-        print(f"Serving live QA view from {self.config.database} at {url}")
-        print("Press Ctrl+C to stop.")
+        logger.info("Serving live QA view from %s at %s", self.config.database, url)
+        logger.info("Press Ctrl+C to stop.")
         if self.open_browser:
             webbrowser.open(url)
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            print("\nStopping render server.")
+            logger.info("Stopping render server.")
         finally:
             server.server_close()
