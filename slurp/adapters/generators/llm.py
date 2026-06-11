@@ -120,13 +120,12 @@ class LLMGenerator(GeneratorProtocol):
                 "; ".join(map(str, exceptions)),
             )
 
-        # Filter out exceptions and empty results. Guard on AgentRunResult first:
-        # run_limited(return_exceptions=True) yields Exception objects too, and
-        # `Exception.output` would raise AttributeError (matches generate_from_batch).
+        # Filter out exceptions and empty results. Use duck-typing so test fakes
+        # (and any future non-AgentRunResult wrappers) also pass through.
         qs: list[str] = [
             qa.output.question
             for qa in qs
-            if isinstance(qa, AgentRunResult) and isinstance(qa.output, QuestionSchema)
+            if not isinstance(qa, Exception) and isinstance(getattr(qa, "output", None), QuestionSchema)
         ]
         if not qs:
             return None
@@ -145,14 +144,18 @@ class LLMGenerator(GeneratorProtocol):
             return_exceptions=True,
         )
 
-        qas = dict(zip(qs, answers, strict=False))
-
-        # Filter out exceptions and empty results
+        paired = list(zip(qs, answers, strict=True))
         qas = [
             QA(q, a.output.answer, a.output.chunks)
-            for q, a in qas.items()
-            if not isinstance(a, Exception) and isinstance(a.output, AnswerSchema)
+            for q, a in paired
+            if not isinstance(a, Exception)
+            and isinstance(getattr(a, "output", None), AnswerSchema)
         ]
+        dropped = len(paired) - len(qas)
+        if dropped:
+            logger.warning(
+                "Dropped %d/%d answers that failed for '%s'", dropped, len(paired), res.title
+            )
 
         return Generation(question_answers=qas, references=[res], language=res.language)
 
