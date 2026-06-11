@@ -3,18 +3,12 @@ from asyncio import Semaphore
 from collections.abc import AsyncIterator
 from collections.abc import Awaitable
 from collections.abc import Callable
-from contextlib import asynccontextmanager
 from typing import Any
 from typing import AsyncContextManager
 from typing import TypeVar
 
 
 T = TypeVar("T")
-
-
-@asynccontextmanager
-async def noop_ctx(*args, **kwargs):
-    yield
 
 
 async def run_limited[T](
