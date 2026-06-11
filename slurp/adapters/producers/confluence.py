@@ -13,15 +13,15 @@ from uuid import uuid4
 
 from atlassian import Confluence
 
-
-logger = logging.getLogger(__name__)
-
 from slurp.adapters.asyncio import flatten_lazy
 from slurp.domain.config import ConfluenceConfig
 from slurp.domain.config import GeneratorConfig
 from slurp.domain.models import ConfluencePage
 from slurp.domain.models import Task
 from slurp.domain.ports import ProducerProtocol
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
