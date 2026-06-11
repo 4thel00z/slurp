@@ -3,14 +3,14 @@ from dataclasses import dataclass
 
 from atlassian import Confluence
 
-
-logger = logging.getLogger(__name__)
-
 from slurp.domain.config import ConfluenceConfig
 from slurp.domain.models import Task
 from slurp.domain.models import TaskResult
 from slurp.domain.ports import DownloaderProtocol
 from slurp.hash import strhash
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
