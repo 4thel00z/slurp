@@ -1,3 +1,4 @@
+import logging
 import random
 from bisect import bisect_right
 from collections import defaultdict
@@ -24,6 +25,9 @@ from slurp.domain.models import TaskResult
 from slurp.domain.ports import GeneratorProtocol
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class LLMGenerator(GeneratorProtocol):
     token_config: TokenConfig | None
@@ -39,6 +43,7 @@ class LLMGenerator(GeneratorProtocol):
         self.provider = OpenAIProvider(
             base_url=self.config.base_url, api_key=self.token_config.api_key
         )
+        self.model = OpenAIModel(model_name=self.config.model, provider=self.provider)
 
     @staticmethod
     def mixed_difficulty_distribution(
@@ -85,9 +90,8 @@ class LLMGenerator(GeneratorProtocol):
         return [" ".join(words[i : i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
     async def make_request(self, prompt: str, output_type: Any = str, retries: int = 3) -> Any:
-        """Make a request to OpenRouter API using OpenAI client."""
-        model = OpenAIModel(model_name=self.config.model, provider=self.provider)
-        agent = Agent(model=model, output_type=output_type, retries=retries)
+        """Make a request to the configured OpenAI-compatible endpoint."""
+        agent = Agent(model=self.model, output_type=output_type, retries=retries)
         return await agent.run(user_prompt=prompt)
 
     async def generate(self, res: TaskResult, is_short: bool = True) -> Generation | None:
@@ -109,7 +113,12 @@ class LLMGenerator(GeneratorProtocol):
         )
         exceptions = [q for q in qs if isinstance(q, Exception)]
         if exceptions:
-            print(f"⚠️  Some requests failed: {'\n'.join(map(str, exceptions))}")
+            logger.warning(
+                "%d question request(s) failed for '%s': %s",
+                len(exceptions),
+                res.title,
+                "; ".join(map(str, exceptions)),
+            )
 
         # Filter out exceptions and empty results. Guard on AgentRunResult first:
         # run_limited(return_exceptions=True) yields Exception objects too, and
@@ -149,7 +158,7 @@ class LLMGenerator(GeneratorProtocol):
 
     async def get_templates(self, res: TaskResult, is_short: bool = True):
         n = self.num_questions(res.content)
-        print(f"Generating {n} questions for document: {res.title}")
+        logger.info("Generating %d questions for document: %s", n, res.title)
         # Define difficulty distribution based on ratio
         difficulty_distributions = {
             FormatterDifficulties.EASY: [FormatterDifficulties.EASY] * n,
