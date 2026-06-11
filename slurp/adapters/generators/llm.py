@@ -111,8 +111,14 @@ class LLMGenerator(GeneratorProtocol):
         if exceptions:
             print(f"⚠️  Some requests failed: {'\n'.join(map(str, exceptions))}")
 
-        # Filter out exceptions and empty results
-        qs: list[str] = [qa.output.question for qa in qs if isinstance(qa.output, QuestionSchema)]
+        # Filter out exceptions and empty results. Guard on AgentRunResult first:
+        # run_limited(return_exceptions=True) yields Exception objects too, and
+        # `Exception.output` would raise AttributeError (matches generate_from_batch).
+        qs: list[str] = [
+            qa.output.question
+            for qa in qs
+            if isinstance(qa, AgentRunResult) and isinstance(qa.output, QuestionSchema)
+        ]
         if not qs:
             return None
 
