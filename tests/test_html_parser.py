@@ -164,3 +164,32 @@ async def test_html_parser_mutator(html_parser):
     assert "Content" in mutated.content
     assert "<html>" not in mutated.content
     assert mutated.hash == task_result.hash
+
+
+def test_no_executor_until_called():
+    parser = HTMLParser()
+    assert parser._executor is None
+
+
+@pytest.mark.asyncio
+async def test_shutdown_releases_executor():
+    parser = HTMLParser()
+    task_result = TaskResult(
+        title="t", status_code=200, headers={}, content="<p>hi</p>", hash="h", url="u"
+    )
+    await parser(task_result)
+    assert parser._executor is not None
+    parser.shutdown()
+    assert parser._executor is None
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_shuts_down():
+    async with HTMLParser() as parser:
+        await parser(
+            TaskResult(
+                title="t", status_code=200, headers={}, content="<p>hi</p>", hash="h", url="u"
+            )
+        )
+        assert parser._executor is not None
+    assert parser._executor is None
