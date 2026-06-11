@@ -216,26 +216,30 @@ class KafkaConfig:
     def add_to_parser(parser: argparse.ArgumentParser) -> None:
         """Add Kafka configuration arguments to the given parser."""
         group = parser.add_argument_group("Kafka Options")
+        # Defaults are None so CLI flags fall through to env vars in
+        # from_default(): precedence is CLI flag > env var > hardcoded default.
+        # (A non-None argparse default is always truthy, so `args.x or env`
+        # would pin the arg and the env var could never win.)
         group.add_argument(
             "--kafka-bootstrap-servers",
             dest="bootstrap_servers",
             type=str,
-            default="localhost:19092",
-            help="Kafka bootstrap servers (default: localhost:19092)",
+            default=None,
+            help="Kafka bootstrap servers (default: $KAFKA_BOOTSTRAP_SERVERS or localhost:19092)",
         )
         group.add_argument(
             "--kafka-topic",
             dest="topic",
             type=str,
-            default="tasks",
-            help="Kafka topic to produce to (default: tasks)",
+            default=None,
+            help="Kafka topic to produce to (default: $KAFKA_TOPIC or tasks)",
         )
         group.add_argument(
             "--kafka-client-id",
             dest="client_id",
             type=str,
-            default="slurp",
-            help="Kafka client ID (default: slurp)",
+            default=None,
+            help="Kafka client ID (default: $KAFKA_CLIENT_ID or slurp)",
         )
 
     @staticmethod
