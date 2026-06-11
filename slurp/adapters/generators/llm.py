@@ -76,18 +76,19 @@ class LLMGenerator(GeneratorProtocol):
         random.shuffle(dist)
         return dist
 
-    @staticmethod
-    def num_questions(document_content):
-        """
-        Estimate the number of questions based on the length of the document content.
-        This is a heuristic based on the number of words in the document.
-        """
-        return bisect_right([500, 1000, 2000, 4000], len(document_content.split())) + 1
+    QUESTION_COUNT_THRESHOLDS = (500, 1000, 2000, 4000)
+    DEFAULT_CHUNK_SIZE = 1000
 
-    @staticmethod
-    def create_chunks(content: str, chunk_size: int = 1000) -> list[str]:
+    @classmethod
+    def num_questions(cls, document_content):
+        """Estimate question count from document word length."""
+        return bisect_right(cls.QUESTION_COUNT_THRESHOLDS, len(document_content.split())) + 1
+
+    @classmethod
+    def create_chunks(cls, content: str, chunk_size: int | None = None) -> list[str]:
+        size = chunk_size or cls.DEFAULT_CHUNK_SIZE
         words = content.split()
-        return [" ".join(words[i : i + chunk_size]) for i in range(0, len(words), chunk_size)]
+        return [" ".join(words[i : i + size]) for i in range(0, len(words), size)]
 
     async def make_request(self, prompt: str, output_type: Any = str, retries: int = 3) -> Any:
         """Make a request to the configured OpenAI-compatible endpoint."""
@@ -125,7 +126,8 @@ class LLMGenerator(GeneratorProtocol):
         qs: list[str] = [
             qa.output.question
             for qa in qs
-            if not isinstance(qa, Exception) and isinstance(getattr(qa, "output", None), QuestionSchema)
+            if not isinstance(qa, Exception)
+            and isinstance(getattr(qa, "output", None), QuestionSchema)
         ]
         if not qs:
             return None
@@ -148,8 +150,7 @@ class LLMGenerator(GeneratorProtocol):
         qas = [
             QA(q, a.output.answer, a.output.chunks)
             for q, a in paired
-            if not isinstance(a, Exception)
-            and isinstance(getattr(a, "output", None), AnswerSchema)
+            if not isinstance(a, Exception) and isinstance(getattr(a, "output", None), AnswerSchema)
         ]
         dropped = len(paired) - len(qas)
         if dropped:

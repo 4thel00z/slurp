@@ -23,8 +23,7 @@ class _Translation:
 @pytest.mark.asyncio
 async def test_duplicate_questions_are_not_collapsed(monkeypatch):
     gen = LLMGenerator(
-        token_config=TokenConfig(api_key="x"),
-        config=GeneratorConfig(language="en", model="m"),
+        token_config=TokenConfig(api_key="x"), config=GeneratorConfig(language="en", model="m")
     )
 
     async def fake_get_templates(res, is_short=True):

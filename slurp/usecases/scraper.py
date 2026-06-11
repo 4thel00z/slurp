@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 from dataclasses import dataclass
 from dataclasses import field
@@ -11,6 +12,9 @@ from slurp.domain.config import AppConfig
 from slurp.domain.ports import ProducerProtocol
 from slurp.domain.ports import QueueSubmitterProtocol
 from slurp.domain.validation import validate_app_config
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,21 +42,17 @@ class ScrapeUsecase:
         self.submitter = KafkaQueueSubmitter(self.app_config.kafka)
 
     async def run(self):
-        """
-        Main scraper function that orchestrates the scraping process.
-        """
+        """Discover tasks from the producer and submit them to the queue."""
         async with self.submitter:
-            print(f"Starting scraper with producer: {self.producer.name()}")
-            print(f"Kafka config: {self.app_config.kafka}")
-            async for i, task in aenumerate(self.producer(), start=1):
-                if not task:
-                    print("Received empty task, breaking")
-                    break
-                print(f"Submitting task {i}: {task.title} (key: {task.idempotency_key})")
+            logger.info("Starting scraper with producer: %s", self.producer.name())
+            logger.info("Kafka config: %s", self.app_config.kafka)
+            count = 0
+            async for count, task in aenumerate(self.producer(), start=1):
+                logger.info(
+                    "Submitting task %d: %s (key: %s)", count, task.title, task.idempotency_key
+                )
                 await self.submitter.submit(task)
-                print(f"Task {i} submitted successfully")
-
-            print(f"Scraper completed. Total tasks submitted: {i}")
+            logger.info("Scraper completed. Total tasks submitted: %d", count)
 
 
 if __name__ == "__main__":
