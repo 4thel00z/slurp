@@ -27,6 +27,13 @@ def scraper(workers: int = 1):
     """
     Runs the document scraper to produce tasks.
     """
+    if workers == 1:
+        # Single worker: run in-process. Avoids multiprocessing fork() entirely,
+        # which on macOS crashes child processes that use threaded HTTP clients
+        # (see worker()), and keeps sys.argv intact for config parsing.
+        run_scraper_process()
+        return
+
     processes = []
     for i in range(workers):
         print(f"Starting scraper process {i + 1}/{workers}")
@@ -62,6 +69,16 @@ def worker(workers: int = 1):
     """
     Runs the document worker to consume tasks.
     """
+    if workers == 1:
+        # Single worker: run in-process instead of forking a child. The forked
+        # child (multiprocessing fork start method) intermittently crashes on
+        # macOS after a while — it inherits fork-unsafe state and then uses
+        # threaded HTTP clients (httpx/openai via pydantic_ai), so it dies with
+        # no Python traceback. Running in the main process avoids fork() and is
+        # the right thing to do for a single consumer anyway.
+        run_worker_process()
+        return
+
     processes = []
     for i in range(workers):
         print(f"Starting worker process {i + 1}/{workers}")
