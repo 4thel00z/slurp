@@ -158,9 +158,9 @@ class LLMGenerator(GeneratorProtocol):
             FormatterDifficulties.MIXED: LLMGenerator.mixed_difficulty_distribution(n),
             FormatterDifficulties.BALANCED: LLMGenerator.balanced_difficulty_distribution(n),
         }
-        difficulty_ratio: str = res.difficulty
+        difficulty_ratio = (res.difficulty or "").upper()
         levels = difficulty_distributions.get(
-            difficulty_ratio, difficulty_distributions.get(FormatterDifficulties.MIXED)
+            difficulty_ratio, difficulty_distributions[FormatterDifficulties.MIXED]
         )
         all_templates = {"en": en, "de": de}
         translation = all_templates.get(res.language, de)
