@@ -39,11 +39,15 @@ class SqlitePersistence(TaskResultMutatorProtocol):
 
         # run auto-migration (create tables)
         SQLModel.metadata.create_all(sync_engine, checkfirst=True)
+        sync_engine.dispose()
 
         # session factory
         self.make_session = sessionmaker(
             self.async_engine, class_=AsyncSession, expire_on_commit=False
         )
+
+    async def aclose(self) -> None:
+        await self.async_engine.dispose()
 
     async def __call__(self, response: TaskResult | Generation) -> TaskResult:
         async with self.make_session() as session:
