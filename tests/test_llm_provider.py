@@ -28,10 +28,6 @@ def test_requires_token():
 
 
 def test_model_built_once(monkeypatch):
-    from slurp.adapters.generators.llm import LLMGenerator
-    from slurp.domain.config import GeneratorConfig
-    from slurp.domain.config import TokenConfig
-
     gen = LLMGenerator(
         token_config=TokenConfig(api_key="x"), config=GeneratorConfig(language="en", model="m")
     )
