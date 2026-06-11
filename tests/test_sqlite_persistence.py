@@ -1,5 +1,6 @@
 """Async persistence must actually write rows (regression for missing greenlet)."""
 
+import pytest
 from sqlalchemy import text
 
 from slurp.adapters.mutators.sqlite_persistence import SqlitePersistence
@@ -29,3 +30,10 @@ async def test_persists_task_result(tmp_path):
     async with persistence.async_engine.connect() as conn:
         count = (await conn.execute(text("SELECT count(*) FROM task_results"))).scalar()
     assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_aclose_disposes_engine(tmp_path):
+    cfg = SQLiteConfig(database=str(tmp_path / "x.db"))
+    p = SqlitePersistence(sqlite_config=cfg)
+    await p.aclose()  # must not raise
