@@ -37,7 +37,6 @@ class ConfluenceConfig:
     base_url: str = "https://aleph-alpha.atlassian.net"
     cloud: bool = True
     months_back: int = 0
-    random_selection: bool = True
     concurrency: int = 4
     max_pages: int = 50
     page_batch_size: int = 50
@@ -83,12 +82,6 @@ class ConfluenceConfig:
             type=int,
             default=0,
             help="How many months back to look for updates (0 = no filter, default: 0)",
-        )
-        group.add_argument(
-            "--confluence-random-selection/--no-confluence-random-selection",
-            dest="random_selection",
-            default=True,
-            help="Whether to pick pages at random (default: True)",
         )
         group.add_argument(
             "--confluence-concurrency",
@@ -144,7 +137,6 @@ class ConfluenceConfig:
             cloud=args.cloud,
             max_pages=args.max_pages,
             months_back=args.months_back,
-            random_selection=args.random_selection,
             concurrency=args.concurrency,
             page_batch_size=args.page_batch_size,
             skip=args.skip,
