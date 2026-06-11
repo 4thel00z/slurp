@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 from typing import TypedDict
 
@@ -7,7 +8,7 @@ from pydantic import BaseModel
 from pydantic import Field
 
 
-class FormatterDifficulties:
+class FormatterDifficulties(StrEnum):
     EASY = "EASY"
     MEDIUM = "MEDIUM"
     HARD = "HARD"
@@ -15,7 +16,7 @@ class FormatterDifficulties:
     BALANCED = "BALANCED"
 
 
-class Languages:
+class Languages(StrEnum):
     DE = "de"
     EN = "en"
 
