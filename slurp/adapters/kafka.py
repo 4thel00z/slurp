@@ -24,7 +24,7 @@ class KafkaQueueSubmitter(QueueSubmitterProtocol):
     """
 
     config: KafkaConfig
-    producer: AIOKafkaProducer = None
+    producer: AIOKafkaProducer | None = None
 
     def __post_init__(self):
         if not self.config.bootstrap_servers:
@@ -64,14 +64,12 @@ class KafkaQueueSubmitter(QueueSubmitterProtocol):
         if not self.producer:
             raise RuntimeError("Kafka producer is not initialized. Use 'async with' context.")
         await self.producer.send(self.config.topic, task, key=task.idempotency_key)
-        # Flush to ensure the message is sent immediately
-        await self.producer.flush()
 
 
 @dataclass
 class KafkaConsumer(ConsumerProtocol):
     config: KafkaConfig
-    consumer: AIOKafkaConsumer = None
+    consumer: AIOKafkaConsumer | None = None
 
     def __post_init__(self):
         if not self.config.bootstrap_servers:
