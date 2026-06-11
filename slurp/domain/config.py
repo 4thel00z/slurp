@@ -1,6 +1,5 @@
 import argparse
 import sys
-from argparse import Namespace
 from dataclasses import dataclass
 from os import getenv
 from typing import Optional
@@ -564,14 +563,3 @@ def create_cli_parser() -> argparse.ArgumentParser:
     )
 
     return parser
-
-
-def parse_global_args(argv: list[str]) -> Namespace:
-    """
-    Parse global arguments and return the AppConfig instance.
-    (Deprecated: Use create_cli_parser() instead)
-    """
-    parser = argparse.ArgumentParser(description="Global configuration parser")
-    parser.add_argument("--workers", type=int, dest="workers", default=1)
-    ns, _ = parser.parse_known_args(argv)
-    return ns
