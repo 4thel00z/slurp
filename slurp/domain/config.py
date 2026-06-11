@@ -10,22 +10,24 @@ from slurp.adapters.instrumentation import InstrumentationConfig
 
 @dataclass
 class TokenConfig:
-    openrouter_api_key: str
+    api_key: str
 
     @staticmethod
     def from_env() -> Optional["TokenConfig"]:
-        openrouter_api_key = getenv("OPENROUTER_API_KEY")
-        if not openrouter_api_key:
+        # Generic key for any OpenAI-compatible endpoint, falling back to the
+        # OpenRouter key for backward compatibility.
+        api_key = getenv("LLM_API_KEY") or getenv("OPENROUTER_API_KEY")
+        if not api_key:
             return None
         try:
-            return TokenConfig(openrouter_api_key)
+            return TokenConfig(api_key)
         except ValueError as err:
             print(f"Error creating TokenConfig: {err}")
             return None
 
     def __post_init__(self):
-        if not self.openrouter_api_key:
-            raise ValueError("OPENROUTER_API_KEY must be set in the environment.")
+        if not self.api_key:
+            raise ValueError("LLM_API_KEY or OPENROUTER_API_KEY must be set in the environment.")
 
 
 @dataclass
@@ -512,6 +514,50 @@ def create_cli_parser() -> argparse.ArgumentParser:
     KafkaConfig.add_to_parser(worker_parser)
     GeneratorConfig.add_to_parser(worker_parser)
     SQLiteConfig.add_to_parser(worker_parser)
+
+    # Render subcommand: live HTML view of the generated QA dataset
+    render_parser = subparsers.add_parser(
+        "render",
+        help="Serve a live HTML view of the generated QA dataset",
+        description="Reads the SQLite generations table and serves an auto-refreshing HTML page",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    SQLiteConfig.add_to_parser(render_parser)
+    render_parser.add_argument(
+        "--host", dest="host", type=str, default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
+    )
+    render_parser.add_argument(
+        "--port", dest="port", type=int, default=8077, help="Bind port (default: 8077)"
+    )
+    render_parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        default=False,
+        help="Open the page in a browser on start",
+    )
+
+    # Skill subcommand: print or install the bundled slurp skill
+    skill_parser = subparsers.add_parser(
+        "skill",
+        help="Print or install the bundled slurp skill (SKILL.md)",
+        description="Prints the bundled slurp skill, or installs it under .claude/skills/slurp/",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    skill_parser.add_argument(
+        "--install",
+        dest="install",
+        action="store_true",
+        default=False,
+        help="Write the skill to <base-dir>/.claude/skills/slurp/SKILL.md instead of printing",
+    )
+    skill_parser.add_argument(
+        "--base-dir",
+        dest="base_dir",
+        type=str,
+        default=".",
+        help="Base directory for --install (default: current directory)",
+    )
 
     return parser
 

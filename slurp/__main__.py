@@ -85,6 +85,14 @@ if __name__ == "__main__":
             scraper(args.workers)
         case "worker":
             worker(args.workers)
+        case "render":
+            from slurp.usecases.render import RenderUsecase
+
+            RenderUsecase(host=args.host, port=args.port, open_browser=args.open_browser).run()
+        case "skill":
+            from slurp.usecases.skill import run as run_skill
+
+            run_skill(install=args.install, base_dir=args.base_dir)
         case _:
             print(f"Unknown command: {args.command}")
             sys.exit(os.EX_USAGE)
