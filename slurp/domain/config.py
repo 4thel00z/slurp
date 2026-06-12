@@ -1,481 +1,363 @@
+"""CLI parser and settings loader.
+
+Builds the argparse surface (subcommands + flags), then loads validated
+``AppSettings`` applying precedence CLI flag > env var > .env > default. Every
+flag defaults to ``None`` so unset flags never mask environment variables.
+"""
+
 import argparse
-import logging
+import os
 import sys
-from dataclasses import dataclass
-from os import getenv
 
-from slurp.adapters.instrumentation import InstrumentationConfig
+from pydantic import ValidationError
 
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TokenConfig:
-    api_key: str
-
-    @staticmethod
-    def from_env() -> "TokenConfig | None":
-        # Generic key for any OpenAI-compatible endpoint, falling back to the
-        # OpenRouter key for backward compatibility.
-        api_key = getenv("LLM_API_KEY") or getenv("OPENROUTER_API_KEY")
-        if not api_key:
-            return None
-        try:
-            return TokenConfig(api_key)
-        except ValueError as err:
-            logger.error("Error creating TokenConfig: %s", err)
-            return None
-
-    def __post_init__(self):
-        if not self.api_key:
-            raise ValueError("LLM_API_KEY or OPENROUTER_API_KEY must be set in the environment.")
+from slurp.domain.settings import AppSettings
+from slurp.domain.settings import ConfluenceSettings
+from slurp.domain.settings import GeneratorSettings
+from slurp.domain.settings import InstrumentationSettings
+from slurp.domain.settings import KafkaSettings
+from slurp.domain.settings import LocalSettings
+from slurp.domain.settings import SQLiteSettings
+from slurp.domain.settings import TokenSettings
+from slurp.domain.validation import ConfigError
 
 
-@dataclass
-class ConfluenceConfig:
-    username: str
-    api_key: str
-    space: str
-    base_url: str = "https://aleph-alpha.atlassian.net"
-    cloud: bool = True
-    months_back: int = 0
-    concurrency: int = 4
-    max_pages: int = 50
-    page_batch_size: int = 50
-    skip: int = 0
-    enabled: bool = True
-
-    @staticmethod
-    def add_to_parser(parser: argparse.ArgumentParser) -> None:
-        """Add Confluence configuration arguments to the given parser."""
-        group = parser.add_argument_group("Confluence Options")
-        group.add_argument(
-            "--confluence-space", dest="space", type=str, default="", help="Space key to operate on"
-        )
-        group.add_argument(
-            "--confluence-cloud/--no-confluence-cloud",
-            dest="cloud",
-            default=True,
-            help="Use Confluence Cloud API (default: True)",
-        )
-        group.add_argument(
-            "--confluence-enabled",
-            dest="enabled",
-            action="store_true",
-            default=True,
-            help="Enable Confluence integration (default: True)",
-        )
-        group.add_argument(
-            "--confluence-disabled",
-            dest="enabled",
-            action="store_false",
-            help="Disable Confluence integration",
-        )
-        group.add_argument(
-            "--confluence-max-pages",
-            dest="max_pages",
-            type=int,
-            default=50,
-            help="Maximum number of pages to fetch (default: 50)",
-        )
-        group.add_argument(
-            "--confluence-months-back",
-            dest="months_back",
-            type=int,
-            default=0,
-            help="How many months back to look for updates (0 = no filter, default: 0)",
-        )
-        group.add_argument(
-            "--confluence-concurrency",
-            dest="concurrency",
-            type=int,
-            default=4,
-            help="Number of concurrent workers (default: 4)",
-        )
-        group.add_argument(
-            "--confluence-page-batch-size",
-            dest="page_batch_size",
-            type=int,
-            default=50,
-            help="Page-size for list endpoints (default: 50)",
-        )
-        group.add_argument(
-            "--confluence-skip",
-            dest="skip",
-            type=int,
-            default=0,
-            help="Number of pages to skip (default: 0)",
-        )
-        group.add_argument(
-            "--confluence-base-url",
-            dest="base_url",
-            type=str,
-            default="https://aleph-alpha.atlassian.net",
-            help="Base URL for API calls (default: https://aleph-alpha.atlassian.net)",
-        )
-        group.add_argument(
-            "--confluence-username",
-            dest="username",
-            type=str,
-            default="",
-            help="User email for Confluence authentication",
-        )
-
-    @staticmethod
-    def parse(argv: list[str]):
-        parser = argparse.ArgumentParser(description="Confluence configuration parser")
-        ConfluenceConfig.add_to_parser(parser)
-        return parser.parse_known_args(argv)
-
-    @staticmethod
-    def from_default(argv: list[str] | None = None) -> "ConfluenceConfig":
-        argv = argv if argv else sys.argv
-        args, _ = ConfluenceConfig.parse(argv)
-        return ConfluenceConfig(
-            base_url=args.base_url or getenv("CONFLUENCE_BASE_URL") or "",
-            username=args.username or getenv("CONFLUENCE_USERNAME") or "",
-            api_key=getenv("CONFLUENCE_API_KEY") or "",
-            space=args.space,
-            cloud=args.cloud,
-            max_pages=args.max_pages,
-            months_back=args.months_back,
-            concurrency=args.concurrency,
-            page_batch_size=args.page_batch_size,
-            skip=args.skip,
-            enabled=args.enabled,
-        )
-
-
-@dataclass
-class LocalConfig:
-    path: str = ""
-    glob: str = "**/*"
-    extensions: str = ".md,.html,.txt"
-    enabled: bool = True
-
-    def extension_list(self) -> list[str]:
-        return [e.strip().lower() for e in self.extensions.split(",") if e.strip()]
-
-    @staticmethod
-    def add_to_parser(parser: argparse.ArgumentParser) -> None:
-        """Add local file connector arguments to the given parser."""
-        group = parser.add_argument_group("Local Options")
-        group.add_argument(
-            "--local-path",
-            dest="local_path",
-            type=str,
-            default="",
-            help="File or directory of local documents to ingest",
-        )
-        group.add_argument(
-            "--local-glob",
-            dest="local_glob",
-            type=str,
-            default="**/*",
-            help="Glob pattern applied when --local-path is a directory (default: **/*)",
-        )
-        group.add_argument(
-            "--local-extensions",
-            dest="local_extensions",
-            type=str,
-            default=".md,.html,.txt",
-            help="Comma-separated file extensions to include (default: .md,.html,.txt)",
-        )
-
-    @staticmethod
-    def parse(argv: list[str] | None = None):
-        parser = argparse.ArgumentParser(add_help=False)
-        LocalConfig.add_to_parser(parser)
-        return parser.parse_known_args(argv)
-
-    @staticmethod
-    def from_default(argv: list[str] | None = None) -> "LocalConfig":
-        argv = argv if argv else sys.argv
-        args, _ = LocalConfig.parse(argv)
-        return LocalConfig(
-            path=args.local_path or getenv("LOCAL_PATH") or "",
-            glob=args.local_glob or getenv("LOCAL_GLOB") or "**/*",
-            extensions=args.local_extensions or getenv("LOCAL_EXTENSIONS") or ".md,.html,.txt",
-        )
-
-
-@dataclass
-class KafkaConfig:
-    bootstrap_servers: str = "localhost:19092"
-    topic: str = "tasks"
-    client_id: str = "slurp"
-
-    @staticmethod
-    def add_to_parser(parser: argparse.ArgumentParser) -> None:
-        """Add Kafka configuration arguments to the given parser."""
-        group = parser.add_argument_group("Kafka Options")
-        # Defaults are None so CLI flags fall through to env vars in
-        # from_default(): precedence is CLI flag > env var > hardcoded default.
-        # (A non-None argparse default is always truthy, so `args.x or env`
-        # would pin the arg and the env var could never win.)
-        group.add_argument(
-            "--kafka-bootstrap-servers",
-            dest="bootstrap_servers",
-            type=str,
-            default=None,
-            help="Kafka bootstrap servers (default: $KAFKA_BOOTSTRAP_SERVERS or localhost:19092)",
-        )
-        group.add_argument(
-            "--kafka-topic",
-            dest="topic",
-            type=str,
-            default=None,
-            help="Kafka topic to produce to (default: $KAFKA_TOPIC or tasks)",
-        )
-        group.add_argument(
-            "--kafka-client-id",
-            dest="client_id",
-            type=str,
-            default=None,
-            help="Kafka client ID (default: $KAFKA_CLIENT_ID or slurp)",
-        )
-
-    @staticmethod
-    def parse(argv: list[str] | None = None):
-        parser = argparse.ArgumentParser(description="Kafka configuration parser")
-        KafkaConfig.add_to_parser(parser)
-        return parser.parse_known_args(argv)
-
-    @staticmethod
-    def from_env() -> "KafkaConfig":
-        return KafkaConfig(
-            bootstrap_servers=getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092"),
-            topic=getenv("KAFKA_TOPIC", "tasks"),
-            client_id=getenv("KAFKA_CLIENT_ID", "slurp"),
-        )
-
-    @staticmethod
-    def from_default(argv: list[str] | None = None) -> "KafkaConfig":
-        argv = argv if argv else sys.argv
-        args, _ = KafkaConfig.parse(argv)
-        defaults = KafkaConfig.from_env()
-        return KafkaConfig(
-            bootstrap_servers=args.bootstrap_servers or defaults.bootstrap_servers,
-            topic=args.topic or defaults.topic,
-            client_id=args.client_id or defaults.client_id,
-        )
-
-
-@dataclass
-class SQLiteConfig:
-    database: str
-    timeout: float = 1.0
-
-    @staticmethod
-    def add_to_parser(parser: argparse.ArgumentParser) -> None:
-        """Add SQLite configuration arguments to the given parser."""
-        group = parser.add_argument_group("SQLite Options")
-        group.add_argument(
-            "--sqlite-database",
-            dest="database",
-            type=str,
-            default=getenv("SQLITE_DATABASE", "./data.db"),
-            help="Path to SQLite database file (default: ./data.db)",
-        )
-        group.add_argument(
-            "--sqlite-timeout",
-            dest="timeout",
-            type=float,
-            default=float(getenv("SQLITE_TIMEOUT", "5.0")),
-            help="Timeout in seconds for database locks (default: 5.0)",
-        )
-
-    @staticmethod
-    def parse(argv: list[str] | None = None):
-        parser = argparse.ArgumentParser(add_help=False)
-        SQLiteConfig.add_to_parser(parser)
-        return parser.parse_known_args(argv)
-
-    @staticmethod
-    def from_env() -> "SQLiteConfig":
-        return SQLiteConfig(
-            database=getenv("SQLITE_DATABASE", "./document_scraper.db"),
-            timeout=float(getenv("SQLITE_TIMEOUT", "1.0")),
-        )
-
-    @staticmethod
-    def from_default(argv: list[str] | None = None) -> "SQLiteConfig":
-        argv = argv or sys.argv
-        args, _ = SQLiteConfig.parse(argv)
-        defaults = SQLiteConfig.from_env()
-        return SQLiteConfig(
-            database=args.database or defaults.database, timeout=args.timeout or defaults.timeout
-        )
-
-
-@dataclass
-class GeneratorConfig:
-    language: str
-    model: str
-    max_tokens: int = 4096
-    temperature: float = 0.7
-    base_url: str = "https://openrouter.ai/api/v1"
-    difficulty_ratio: str = "mixed"
-    concurrency: int = 5
-    is_short: bool = True
-    batch_size: int = 1
-    enabled: bool = True
-
-    @staticmethod
-    def add_to_parser(parser: argparse.ArgumentParser) -> None:
-        """Add Generator configuration arguments to the given parser."""
-        group = parser.add_argument_group("Generator Options")
-        group.add_argument(
-            "--generator-model",
-            dest="model",
-            type=str,
-            default="google/gemini-2.5-flash-preview-05-20",
-            help="LLM model to use for QA generation (default: google/gemini-2.5-flash-preview-05-20)",
-        )
-        group.add_argument(
-            "--generator-language",
-            dest="language",
-            type=str,
-            choices=["de", "en"],
-            default="de",
-            help="Language for generated questions (default: de)",
-        )
-        group.add_argument(
-            "--generator-max-tokens",
-            dest="max_tokens",
-            type=int,
-            default=4096,
-            help="Maximum number of tokens (default: 4096)",
-        )
-        group.add_argument(
-            "--generator-temperature",
-            dest="temperature",
-            type=float,
-            default=0.7,
-            help="Temperature for generation (default: 0.7)",
-        )
-        group.add_argument(
-            "--generator-base-url",
-            dest="base_url",
-            type=str,
-            default="https://openrouter.ai/api/v1",
-            help="Base URL for the LLM API (default: https://openrouter.ai/api/v1)",
-        )
-        group.add_argument(
-            "--generator-difficulty-ratio",
-            dest="difficulty_ratio",
-            type=str,
-            choices=["easy", "medium", "hard", "mixed", "balanced"],
-            default="mixed",
-            help="Question difficulty distribution (default: mixed)",
-        )
-        group.add_argument(
-            "--generator-concurrency",
-            dest="concurrency",
-            type=int,
-            default=5,
-            help="Number of concurrent LLM requests (default: 5)",
-        )
-        group.add_argument(
-            "--generator-is-short",
-            dest="is_short",
-            action="store_true",
-            default=True,
-            help="Generate short questions (default: True)",
-        )
-        group.add_argument(
-            "--generator-batch-size",
-            dest="batch_size",
-            type=int,
-            default=1,
-            help="Number of documents to process together (1=single, >1=cross-document, default: 1)",
-        )
-        group.add_argument(
-            "--generator-enabled",
-            dest="enabled",
-            action="store_true",
-            default=True,
-            help="Enable question generation (default: True)",
-        )
-        group.add_argument(
-            "--generator-disabled",
-            dest="enabled",
-            action="store_false",
-            help="Disable question generation",
-        )
-
-    @staticmethod
-    def from_args(args: list[str]) -> "GeneratorConfig":
-        parser = argparse.ArgumentParser(description="Model configuration parser")
-        GeneratorConfig.add_to_parser(parser)
-        parsed_args, _ = parser.parse_known_args(args)
-        return GeneratorConfig(
-            language=parsed_args.language.lower(),
-            model=parsed_args.model,
-            max_tokens=parsed_args.max_tokens,
-            temperature=parsed_args.temperature,
-            base_url=parsed_args.base_url,
-            difficulty_ratio=parsed_args.difficulty_ratio,
-            concurrency=parsed_args.concurrency,
-            is_short=parsed_args.is_short,
-            batch_size=parsed_args.batch_size,
-            enabled=parsed_args.enabled,
-        )
-
+# Backward-compatible class names consumed by the adapters and existing tests.
+TokenConfig = TokenSettings
+ConfluenceConfig = ConfluenceSettings
+KafkaConfig = KafkaSettings
+GeneratorConfig = GeneratorSettings
+SQLiteConfig = SQLiteSettings
+LocalConfig = LocalSettings
+AppConfig = AppSettings
 
 CONNECTORS = ("local", "confluence")
 DEFAULT_CONNECTOR = "local"
 
-
-def parse_connector(argv: list[str] | None = None) -> str:
-    argv = argv if argv else sys.argv
-    parser = argparse.ArgumentParser(add_help=False)
-    add_connector_arg(parser)
-    args, _ = parser.parse_known_args(argv)
-    return args.connector or getenv("CONNECTOR") or DEFAULT_CONNECTOR
+# argparse dest -> settings field, per section.
+CONFLUENCE_CLI = {
+    "confluence_username": "username",
+    "confluence_api_key": "api_key",
+    "confluence_base_url": "base_url",
+    "confluence_space": "space",
+    "confluence_cloud": "cloud",
+    "confluence_months_back": "months_back",
+    "confluence_concurrency": "concurrency",
+    "confluence_max_pages": "max_pages",
+    "confluence_page_batch_size": "page_batch_size",
+    "confluence_skip": "skip",
+    "confluence_enabled": "enabled",
+}
+KAFKA_CLI = {
+    "kafka_bootstrap_servers": "bootstrap_servers",
+    "kafka_topic": "topic",
+    "kafka_client_id": "client_id",
+}
+GENERATOR_CLI = {
+    "generator_language": "language",
+    "generator_model": "model",
+    "generator_max_tokens": "max_tokens",
+    "generator_temperature": "temperature",
+    "generator_base_url": "base_url",
+    "generator_difficulty_ratio": "difficulty_ratio",
+    "generator_concurrency": "concurrency",
+    "generator_is_short": "is_short",
+    "generator_batch_size": "batch_size",
+    "generator_enabled": "enabled",
+}
+SQLITE_CLI = {"sqlite_database": "database", "sqlite_timeout": "timeout"}
+LOCAL_CLI = {"local_path": "path", "local_glob": "glob", "local_extensions": "extensions"}
 
 
 def add_connector_arg(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--connector",
         dest="connector",
-        type=str,
         choices=CONNECTORS,
-        default=DEFAULT_CONNECTOR,
-        help=f"Which source connector the scraper uses (default: {DEFAULT_CONNECTOR})",
+        default=None,
+        help=f"Source connector (default: $SLURP_CONNECTOR or {DEFAULT_CONNECTOR})",
     )
 
 
-@dataclass
-class AppConfig:
-    token: TokenConfig | None
-    instrumentation: InstrumentationConfig
-    confluence: ConfluenceConfig
-    kafka: KafkaConfig
-    generator: GeneratorConfig
-    sqlite: SQLiteConfig
-    local: LocalConfig
-    connector: str
+def add_confluence_args(parser: argparse.ArgumentParser) -> None:
+    g = parser.add_argument_group("Confluence Options")
+    g.add_argument(
+        "--confluence-space",
+        dest="confluence_space",
+        default=None,
+        help="Space key ($SLURP_CONFLUENCE_SPACE)",
+    )
+    g.add_argument(
+        "--confluence-cloud",
+        dest="confluence_cloud",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Use Confluence Cloud API ($SLURP_CONFLUENCE_CLOUD)",
+    )
+    g.add_argument(
+        "--confluence-enabled",
+        dest="confluence_enabled",
+        action="store_true",
+        default=None,
+        help="Enable Confluence",
+    )
+    g.add_argument(
+        "--confluence-disabled",
+        dest="confluence_enabled",
+        action="store_false",
+        help="Disable Confluence",
+    )
+    g.add_argument(
+        "--confluence-max-pages",
+        dest="confluence_max_pages",
+        type=int,
+        default=None,
+        help="Max pages ($SLURP_CONFLUENCE_MAX_PAGES)",
+    )
+    g.add_argument(
+        "--confluence-months-back",
+        dest="confluence_months_back",
+        type=int,
+        default=None,
+        help="Months back filter ($SLURP_CONFLUENCE_MONTHS_BACK)",
+    )
+    g.add_argument(
+        "--confluence-concurrency",
+        dest="confluence_concurrency",
+        type=int,
+        default=None,
+        help="Concurrency ($SLURP_CONFLUENCE_CONCURRENCY)",
+    )
+    g.add_argument(
+        "--confluence-page-batch-size",
+        dest="confluence_page_batch_size",
+        type=int,
+        default=None,
+        help="List page size ($SLURP_CONFLUENCE_PAGE_BATCH_SIZE)",
+    )
+    g.add_argument(
+        "--confluence-skip",
+        dest="confluence_skip",
+        type=int,
+        default=None,
+        help="Pages to skip ($SLURP_CONFLUENCE_SKIP)",
+    )
+    g.add_argument(
+        "--confluence-base-url",
+        dest="confluence_base_url",
+        default=None,
+        help="Base URL ($SLURP_CONFLUENCE_BASE_URL / CONFLUENCE_BASE_URL)",
+    )
+    g.add_argument(
+        "--confluence-username",
+        dest="confluence_username",
+        default=None,
+        help="Username ($SLURP_CONFLUENCE_USERNAME / CONFLUENCE_USERNAME)",
+    )
 
-    @staticmethod
-    def from_default(argv: list[str]) -> "AppConfig":
-        return AppConfig(
-            token=TokenConfig.from_env(),
-            instrumentation=InstrumentationConfig.from_env(),
-            confluence=ConfluenceConfig.from_default(argv=argv),
-            kafka=KafkaConfig.from_default(argv=argv),
-            generator=GeneratorConfig.from_args(args=argv),
-            sqlite=SQLiteConfig.from_default(argv=argv),
-            local=LocalConfig.from_default(argv=argv),
-            connector=parse_connector(argv),
+
+def add_local_args(parser: argparse.ArgumentParser) -> None:
+    g = parser.add_argument_group("Local Options")
+    g.add_argument(
+        "--local-path",
+        dest="local_path",
+        default=None,
+        help="File/dir to ingest ($SLURP_LOCAL_PATH / LOCAL_PATH)",
+    )
+    g.add_argument(
+        "--local-glob",
+        dest="local_glob",
+        default=None,
+        help="Glob for directories ($SLURP_LOCAL_GLOB / LOCAL_GLOB)",
+    )
+    g.add_argument(
+        "--local-extensions",
+        dest="local_extensions",
+        default=None,
+        help="Comma-separated extensions ($SLURP_LOCAL_EXTENSIONS / LOCAL_EXTENSIONS)",
+    )
+
+
+def add_kafka_args(parser: argparse.ArgumentParser) -> None:
+    g = parser.add_argument_group("Kafka Options")
+    g.add_argument(
+        "--kafka-bootstrap-servers",
+        dest="kafka_bootstrap_servers",
+        default=None,
+        help="Bootstrap servers ($SLURP_KAFKA_BOOTSTRAP_SERVERS)",
+    )
+    g.add_argument(
+        "--kafka-topic", dest="kafka_topic", default=None, help="Topic ($SLURP_KAFKA_TOPIC)"
+    )
+    g.add_argument(
+        "--kafka-client-id",
+        dest="kafka_client_id",
+        default=None,
+        help="Client id ($SLURP_KAFKA_CLIENT_ID)",
+    )
+
+
+def add_generator_args(parser: argparse.ArgumentParser) -> None:
+    g = parser.add_argument_group("Generator Options")
+    g.add_argument(
+        "--generator-model",
+        dest="generator_model",
+        default=None,
+        help="LLM model ($SLURP_GENERATOR_MODEL)",
+    )
+    g.add_argument(
+        "--generator-language",
+        dest="generator_language",
+        choices=["de", "en"],
+        default=None,
+        help="Language ($SLURP_GENERATOR_LANGUAGE)",
+    )
+    g.add_argument(
+        "--generator-max-tokens",
+        dest="generator_max_tokens",
+        type=int,
+        default=None,
+        help="Max tokens ($SLURP_GENERATOR_MAX_TOKENS)",
+    )
+    g.add_argument(
+        "--generator-temperature",
+        dest="generator_temperature",
+        type=float,
+        default=None,
+        help="Temperature ($SLURP_GENERATOR_TEMPERATURE)",
+    )
+    g.add_argument(
+        "--generator-base-url",
+        dest="generator_base_url",
+        default=None,
+        help="LLM base URL ($SLURP_GENERATOR_BASE_URL)",
+    )
+    g.add_argument(
+        "--generator-difficulty-ratio",
+        dest="generator_difficulty_ratio",
+        choices=["easy", "medium", "hard", "mixed", "balanced"],
+        default=None,
+        help="Difficulty ($SLURP_GENERATOR_DIFFICULTY_RATIO)",
+    )
+    g.add_argument(
+        "--generator-concurrency",
+        dest="generator_concurrency",
+        type=int,
+        default=None,
+        help="Concurrent LLM requests ($SLURP_GENERATOR_CONCURRENCY)",
+    )
+    g.add_argument(
+        "--generator-is-short",
+        dest="generator_is_short",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Short questions ($SLURP_GENERATOR_IS_SHORT)",
+    )
+    g.add_argument(
+        "--generator-batch-size",
+        dest="generator_batch_size",
+        type=int,
+        default=None,
+        help="Docs per batch ($SLURP_GENERATOR_BATCH_SIZE)",
+    )
+    g.add_argument(
+        "--generator-enabled",
+        dest="generator_enabled",
+        action="store_true",
+        default=None,
+        help="Enable QA generation",
+    )
+    g.add_argument(
+        "--generator-disabled",
+        dest="generator_enabled",
+        action="store_false",
+        help="Disable QA generation",
+    )
+
+
+def add_sqlite_args(parser: argparse.ArgumentParser) -> None:
+    g = parser.add_argument_group("SQLite Options")
+    g.add_argument(
+        "--sqlite-database",
+        dest="sqlite_database",
+        default=None,
+        help="DB path ($SLURP_SQLITE_DATABASE / SQLITE_DATABASE)",
+    )
+    g.add_argument(
+        "--sqlite-timeout",
+        dest="sqlite_timeout",
+        type=float,
+        default=None,
+        help="Lock timeout secs ($SLURP_SQLITE_TIMEOUT / SQLITE_TIMEOUT)",
+    )
+
+
+def _overrides(args: argparse.Namespace, mapping: dict[str, str]) -> dict:
+    out = {}
+    for dest, field in mapping.items():
+        val = getattr(args, dest, None)
+        if val is not None:
+            out[field] = val
+    return out
+
+
+def _format_validation_error(err: ValidationError) -> str:
+    lines = []
+    for e in err.errors():
+        loc = ".".join(str(p) for p in e["loc"])
+        msg = e["msg"]
+        lines.append(f"{loc}: {msg}" if loc else msg)
+    return "Invalid configuration:\n  - " + "\n  - ".join(lines)
+
+
+def _parse_all(argv: list[str] | None) -> argparse.Namespace:
+    argv = argv if argv is not None else sys.argv
+    parser = argparse.ArgumentParser(add_help=False)
+    add_connector_arg(parser)
+    add_confluence_args(parser)
+    add_local_args(parser)
+    add_kafka_args(parser)
+    add_generator_args(parser)
+    add_sqlite_args(parser)
+    args, _ = parser.parse_known_args(argv)
+    return args
+
+
+def load_settings(argv: list[str] | None = None) -> AppSettings:
+    """Load validated AppSettings; raise ConfigError on any invalid value."""
+    args = _parse_all(argv)
+    connector = (
+        getattr(args, "connector", None)
+        or os.getenv("SLURP_CONNECTOR")
+        or os.getenv("CONNECTOR")
+        or DEFAULT_CONNECTOR
+    )
+    try:
+        return AppSettings(
+            token=TokenSettings(),
+            instrumentation=InstrumentationSettings(),
+            confluence=ConfluenceSettings(**_overrides(args, CONFLUENCE_CLI)),
+            kafka=KafkaSettings(**_overrides(args, KAFKA_CLI)),
+            generator=GeneratorSettings(**_overrides(args, GENERATOR_CLI)),
+            sqlite=SQLiteSettings(**_overrides(args, SQLITE_CLI)),
+            local=LocalSettings(**_overrides(args, LOCAL_CLI)),
+            connector=connector,
         )
+    except ValidationError as err:
+        raise ConfigError(_format_validation_error(err)) from err
+
+
+def load_sqlite_settings(argv: list[str] | None = None) -> SQLiteSettings:
+    """Load only the SQLite section (for the render command)."""
+    args = _parse_all(argv)
+    try:
+        return SQLiteSettings(**_overrides(args, SQLITE_CLI))
+    except ValidationError as err:
+        raise ConfigError(_format_validation_error(err)) from err
 
 
 def create_cli_parser() -> argparse.ArgumentParser:
-    """
-    Create the main CLI parser with subcommands for scraper and worker.
-    """
+    """Main CLI parser with scraper/worker/render/skill subcommands."""
     parser = argparse.ArgumentParser(
         prog="slurp",
         description="Slurp - Confluence RAG Dataset Generator",
@@ -484,45 +366,41 @@ def create_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workers", type=int, default=1, help="Number of worker processes (default: 1)"
     )
-
     subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
-    # Scraper subcommand
     scraper_parser = subparsers.add_parser(
         "scraper",
-        help="Run the Confluence page scraper",
-        description="Discovers Confluence pages and submits them to Kafka queue",
+        help="Run the page scraper",
+        description="Discovers pages and submits them to the Kafka queue",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     add_connector_arg(scraper_parser)
-    ConfluenceConfig.add_to_parser(scraper_parser)
-    LocalConfig.add_to_parser(scraper_parser)
-    KafkaConfig.add_to_parser(scraper_parser)
+    add_confluence_args(scraper_parser)
+    add_local_args(scraper_parser)
+    add_kafka_args(scraper_parser)
 
-    # Worker subcommand
     worker_parser = subparsers.add_parser(
         "worker",
         help="Run the QA generation worker",
-        description="Processes pages from Kafka and generates Question-Answer pairs",
+        description="Processes pages from Kafka and generates QA pairs",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     add_connector_arg(worker_parser)
-    ConfluenceConfig.add_to_parser(worker_parser)
-    LocalConfig.add_to_parser(worker_parser)
-    KafkaConfig.add_to_parser(worker_parser)
-    GeneratorConfig.add_to_parser(worker_parser)
-    SQLiteConfig.add_to_parser(worker_parser)
+    add_confluence_args(worker_parser)
+    add_local_args(worker_parser)
+    add_kafka_args(worker_parser)
+    add_generator_args(worker_parser)
+    add_sqlite_args(worker_parser)
 
-    # Render subcommand: live HTML view of the generated QA dataset
     render_parser = subparsers.add_parser(
         "render",
-        help="Serve a live HTML view of the generated QA dataset",
-        description="Reads the SQLite generations table and serves an auto-refreshing HTML page",
+        help="Serve a live HTML view of the QA dataset",
+        description="Reads the SQLite generations table and serves an auto-refreshing page",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    SQLiteConfig.add_to_parser(render_parser)
+    add_sqlite_args(render_parser)
     render_parser.add_argument(
-        "--host", dest="host", type=str, default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
+        "--host", dest="host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
     )
     render_parser.add_argument(
         "--port", dest="port", type=int, default=8077, help="Bind port (default: 8077)"
@@ -535,7 +413,6 @@ def create_cli_parser() -> argparse.ArgumentParser:
         help="Open the page in a browser on start",
     )
 
-    # Skill subcommand: print or install the bundled slurp skill
     skill_parser = subparsers.add_parser(
         "skill",
         help="Print or install the bundled slurp skill (SKILL.md)",
@@ -547,12 +424,11 @@ def create_cli_parser() -> argparse.ArgumentParser:
         dest="install",
         action="store_true",
         default=False,
-        help="Write the skill to <base-dir>/.claude/skills/slurp/SKILL.md instead of printing",
+        help="Write the skill instead of printing",
     )
     skill_parser.add_argument(
         "--base-dir",
         dest="base_dir",
-        type=str,
         default=".",
         help="Base directory for --install (default: current directory)",
     )
