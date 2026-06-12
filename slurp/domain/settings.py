@@ -19,7 +19,15 @@ from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
 
-_ENV = {"env_file": ".env", "extra": "ignore", "populate_by_name": True, "env_ignore_empty": True}
+_ENV = {
+    "env_file": ".env",
+    "extra": "ignore",
+    "populate_by_name": True,
+    "env_ignore_empty": True,
+    # CLI overrides are applied via setattr after env/.env/default resolve, so
+    # assignment must validate (enforces field bounds on CLI-supplied values).
+    "validate_assignment": True,
+}
 
 
 class TokenSettings(BaseSettings):
