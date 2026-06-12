@@ -1,9 +1,15 @@
 [project]
-name = "slurp"
+name = "slurp-rag"
 version = "0.1.0"
-description = "A Python project with clean architecture"
+description = "Distributed RAG QA-evaluation dataset generator for local files and Confluence."
 readme = "README.md"
 requires-python = ">=3.12"
+keywords = ["rag", "confluence", "dataset", "llm", "evaluation", "qa", "kafka"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "atlassian-python-api>=3.41.0",
     "aiokafka>=0.11.0",
@@ -36,9 +42,21 @@ dev = [
     "pytest-cov>=6.0.0",
 ]
 
+[project.scripts]
+slurp = "slurp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/4thel00z/slurp"
+Repository = "https://github.com/4thel00z/slurp"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# The PyPI distribution name (slurp-rag) differs from the import package
+# (slurp), so tell hatchling which package to ship.
+[tool.hatch.build.targets.wheel]
+packages = ["slurp"]
 
 [tool.ruff]
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.

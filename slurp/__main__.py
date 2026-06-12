@@ -90,7 +90,7 @@ def worker(workers: int = 1):
         process.join()  # Wait for all worker processes to complete
 
 
-if __name__ == "__main__":
+def main() -> None:
     # Use fork method for multiprocessing (Linux/macOS only)
     multiprocessing.set_start_method("fork", force=True)
 
@@ -103,13 +103,17 @@ if __name__ == "__main__":
         case "worker":
             worker(args.workers)
         case "render":
-            from slurp.usecases.render import RenderUsecase
+            from slurp.usecases.render import RenderUsecase  # noqa: PLC0415
 
             RenderUsecase(host=args.host, port=args.port, open_browser=args.open_browser).run()
         case "skill":
-            from slurp.usecases.skill import run as run_skill
+            from slurp.usecases.skill import run as run_skill  # noqa: PLC0415
 
             run_skill(install=args.install, base_dir=args.base_dir)
         case _:
             logger.error("Unknown command: %s", args.command)
             sys.exit(os.EX_USAGE)
+
+
+if __name__ == "__main__":
+    main()
