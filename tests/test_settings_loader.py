@@ -18,6 +18,14 @@ def test_cli_flag_beats_env(monkeypatch):
     assert s.generator.model == "climodel"
 
 
+def test_cli_flag_beats_env_for_aliased_field(monkeypatch):
+    # kafka.topic uses validation_alias (AliasChoices); the CLI must still win over env.
+    monkeypatch.setenv("SLURP_LLM_API_KEY", "tok")
+    monkeypatch.setenv("SLURP_KAFKA_TOPIC", "envtopic")
+    s = load_settings(_argv("--kafka-topic", "clitopic"))
+    assert s.kafka.topic == "clitopic"
+
+
 def test_env_used_when_no_flag(monkeypatch):
     monkeypatch.setenv("SLURP_LLM_API_KEY", "tok")
     monkeypatch.setenv("SLURP_GENERATOR_MODEL", "envmodel")
@@ -68,7 +76,17 @@ def test_load_sqlite_settings_cli_override():
     assert s.database == "/tmp/x.db"
 
 
-def test_legacy_class_names_reexported():
+def test_legacy_class_names_reexported(monkeypatch):
+    for var in (
+        "SLURP_LLM_API_KEY",
+        "LLM_API_KEY",
+        "OPENROUTER_API_KEY",
+        "SLURP_KAFKA_TOPIC",
+        "KAFKA_TOPIC",
+        "SLURP_SQLITE_DATABASE",
+        "SQLITE_DATABASE",
+    ):
+        monkeypatch.delenv(var, raising=False)
     from slurp.domain.config import ConfluenceConfig
     from slurp.domain.config import GeneratorConfig
     from slurp.domain.config import KafkaConfig

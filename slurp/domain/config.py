@@ -301,6 +301,21 @@ def _overrides(args: argparse.Namespace, mapping: dict[str, str]) -> dict:
     return out
 
 
+def _build_section(cls, args: argparse.Namespace, mapping: dict[str, str]):
+    """Construct a section from env/.env/default, then apply CLI overrides on top.
+
+    Constructing first lets env/.env/default resolve. CLI overrides are then
+    applied with ``setattr`` so they win for *every* field — including ones with
+    a ``validation_alias`` where an env alias would otherwise shadow an init
+    kwarg. The models set ``validate_assignment=True``, so each assignment still
+    enforces field bounds on the CLI-supplied value.
+    """
+    section = cls()
+    for field, val in _overrides(args, mapping).items():
+        setattr(section, field, val)
+    return section
+
+
 def _format_validation_error(err: ValidationError) -> str:
     lines = []
     for e in err.errors():
@@ -336,11 +351,11 @@ def load_settings(argv: list[str] | None = None) -> AppSettings:
         return AppSettings(
             token=TokenSettings(),
             instrumentation=InstrumentationSettings(),
-            confluence=ConfluenceSettings(**_overrides(args, CONFLUENCE_CLI)),
-            kafka=KafkaSettings(**_overrides(args, KAFKA_CLI)),
-            generator=GeneratorSettings(**_overrides(args, GENERATOR_CLI)),
-            sqlite=SQLiteSettings(**_overrides(args, SQLITE_CLI)),
-            local=LocalSettings(**_overrides(args, LOCAL_CLI)),
+            confluence=_build_section(ConfluenceSettings, args, CONFLUENCE_CLI),
+            kafka=_build_section(KafkaSettings, args, KAFKA_CLI),
+            generator=_build_section(GeneratorSettings, args, GENERATOR_CLI),
+            sqlite=_build_section(SQLiteSettings, args, SQLITE_CLI),
+            local=_build_section(LocalSettings, args, LOCAL_CLI),
             connector=connector,
         )
     except ValidationError as err:
@@ -351,7 +366,7 @@ def load_sqlite_settings(argv: list[str] | None = None) -> SQLiteSettings:
     """Load only the SQLite section (for the render command)."""
     args = _parse_all(argv)
     try:
-        return SQLiteSettings(**_overrides(args, SQLITE_CLI))
+        return _build_section(SQLiteSettings, args, SQLITE_CLI)
     except ValidationError as err:
         raise ConfigError(_format_validation_error(err)) from err
 
