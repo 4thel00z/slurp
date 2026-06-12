@@ -9,13 +9,14 @@ from slurp.adapters.downloader.confluence import ConfluenceDownloader
 from slurp.adapters.downloader.local import LocalDownloader
 from slurp.adapters.downloader.registry import DownloaderRegistry
 from slurp.adapters.generators.llm import LLMGenerator
+from slurp.adapters.instrumentation import setup_instrumentation
 from slurp.adapters.kafka import KafkaConsumer
 from slurp.adapters.mutators.html_parser import HTMLParser
 from slurp.adapters.mutators.sqlite_persistence import SqlitePersistence
-from slurp.domain.config import AppConfig
+from slurp.domain.config import AppSettings
+from slurp.domain.config import load_settings
 from slurp.domain.models import Generation
 from slurp.domain.models import TaskResult
-from slurp.domain.validation import validate_app_config
 
 
 logger = logging.getLogger(__name__)
@@ -23,14 +24,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkerUsecase:
-    app_config: AppConfig = field(init=False)
+    app_config: AppSettings = field(init=False)
 
     def __post_init__(self):
         # load all configuration from environment/args
-        self.app_config = AppConfig.from_default(sys.argv)
-        validate_app_config(self.app_config)
-        if self.app_config.instrumentation:
-            self.app_config.instrumentation.setup()
+        self.app_config = load_settings(sys.argv)
+        setup_instrumentation(self.app_config.instrumentation.logfire_token)
         logger.info("WorkerUsecase initialized.")
 
         # initialize protocols

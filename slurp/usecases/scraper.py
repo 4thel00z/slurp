@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from dataclasses import field
 
 from slurp.adapters.asyncio import aenumerate
+from slurp.adapters.instrumentation import setup_instrumentation
 from slurp.adapters.kafka import KafkaQueueSubmitter
 from slurp.adapters.producers.confluence import ConfluenceProducer
 from slurp.adapters.producers.local import LocalProducer
-from slurp.domain.config import AppConfig
+from slurp.domain.config import AppSettings
+from slurp.domain.config import load_settings
 from slurp.domain.ports import ProducerProtocol
 from slurp.domain.ports import QueueSubmitterProtocol
-from slurp.domain.validation import validate_app_config
 
 
 logger = logging.getLogger(__name__)
@@ -19,15 +20,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ScrapeUsecase:
-    app_config: AppConfig = field(init=False)
+    app_config: AppSettings = field(init=False)
     producer: ProducerProtocol = field(init=False)
     submitter: QueueSubmitterProtocol = field(init=False)
 
     def __post_init__(self):
-        self.app_config = AppConfig.from_default(sys.argv)
-        validate_app_config(self.app_config)
-        if self.app_config.instrumentation:
-            self.app_config.instrumentation.setup()
+        self.app_config = load_settings(sys.argv)
+        setup_instrumentation(self.app_config.instrumentation.logfire_token)
 
         match self.app_config.connector:
             case "local":

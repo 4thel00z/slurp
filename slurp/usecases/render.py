@@ -15,7 +15,8 @@ from dataclasses import field
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 
-from slurp.domain.config import SQLiteConfig
+from slurp.domain.config import SQLiteSettings
+from slurp.domain.config import load_sqlite_settings
 
 
 logger = logging.getLogger(__name__)
@@ -184,13 +185,13 @@ def _make_handler(database: str):
 
 @dataclass
 class RenderUsecase:
-    config: SQLiteConfig = field(init=False)
+    config: SQLiteSettings = field(init=False)
     host: str = "127.0.0.1"
     port: int = 8077
     open_browser: bool = False
 
     def __post_init__(self):
-        self.config = SQLiteConfig.from_default(sys.argv)
+        self.config = load_sqlite_settings(sys.argv)
 
     def run(self) -> None:
         server = ThreadingHTTPServer((self.host, self.port), _make_handler(self.config.database))
