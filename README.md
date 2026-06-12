@@ -6,7 +6,7 @@
 
 ### Cross-Document RAG Dataset Generator
 
-A comprehensive tool for generating RAG (Retrieval-Augmented Generation) eval datasets from Confluence pages (more sources planned).
+A tool for generating RAG (Retrieval-Augmented Generation) evaluation datasets from local files or Confluence pages, using any OpenAI-compatible LLM.
 
 [![CI](https://github.com/4thel00z/slurp/workflows/CI/badge.svg)](https://github.com/4thel00z/slurp/actions)
 [![CodeQL](https://github.com/4thel00z/slurp/workflows/CodeQL%20Security%20Scan/badge.svg)](https://github.com/4thel00z/slurp/actions)
@@ -27,13 +27,15 @@ This system uses a distributed architecture with Kafka for task queue management
 
 ## Features
 
+- **Pluggable Connectors**: Ingest from local files or a Confluence space via `--connector`
+- **Any OpenAI-Compatible LLM**: OpenRouter by default, or point `--generator-base-url` at any endpoint
 - **Distributed Processing**: Separate scraper and worker processes for scalability
 - **Batch Processing**: Support for processing documents in batches for cross-document questions
-- **Hierarchical Crawling**: Discovers parent-child relationships between pages
-- **Date Filtering**: Filter pages by last modification date (e.g., only pages updated in last 6 months)
+- **Date Filtering**: Filter Confluence pages by last modification date (e.g., only pages updated in the last 6 months)
 - **Intelligent Question Generation**: Creates questions of varying difficulty levels
 - **Multiple Languages**: Support for German and English content
 - **HTML Processing**: Robust HTML parsing for clean text extraction
+- **Fail-Fast Configuration**: Validates env vars and CLI flags at startup with a clear, aggregated error
 
 ## Installation
 
@@ -44,8 +46,8 @@ uv sync
 # Install with standalone script dependencies
 uv sync --extra scripts
 
-# Start Redpanda (Kafka-compatible message broker) for distributed mode
-docker-compose up -d  # If you have a docker-compose.yml for Kafka/Redpanda
+# Start Redpanda (Kafka-compatible broker); the compose file lives in infra/
+docker compose -f infra/docker-compose.yaml up -d
 ```
 
 ## Configuration
@@ -99,7 +101,7 @@ Slurp ingests content through pluggable **connectors**, selected with
 | Connector    | Source                         | Requires                          |
 |--------------|--------------------------------|-----------------------------------|
 | `local`      | Files on disk (`.md/.html/.txt`) | nothing (no Confluence creds)     |
-| `confluence` | A Confluence space             | `CONFLUENCE_*` credentials        |
+| `confluence` | A Confluence space             | `SLURP_CONFLUENCE_*` credentials  |
 
 Both connectors still flow through Kafka and the LLM generator, so a broker
 (`infra/docker-compose.yaml`) and `SLURP_LLM_API_KEY` are required either way.
@@ -206,10 +208,10 @@ The system uses SQLite for storing processed documents and generated QA pairs:
 
 ### Common Issues
 
-1. **Kafka Connection Errors**: Ensure Redpanda is running (`docker-compose ps`)
-2. **Missing Environment Variables**: Check that all required environment variables are set
+1. **Kafka Connection Errors**: Ensure Redpanda is running (`docker compose -f infra/docker-compose.yaml ps`)
+2. **Invalid Configuration**: Slurp validates config at startup and prints exactly what is missing or out of range — read the error and see `.env.example`
 3. **Database Errors**: Verify SQLite database permissions and path
-4. **LLM API Errors**: Check your OpenRouter API key and quota
+4. **LLM API Errors**: Check `SLURP_LLM_API_KEY` and your provider's quota; for non-OpenRouter endpoints also set `--generator-base-url`
 5. **HTML Parsing Issues**: The HTML parser has been optimized for Confluence pages
 
 ## System Components
