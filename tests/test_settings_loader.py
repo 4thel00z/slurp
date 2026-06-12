@@ -85,6 +85,7 @@ def test_legacy_class_names_reexported(monkeypatch):
         "KAFKA_TOPIC",
         "SLURP_SQLITE_DATABASE",
         "SQLITE_DATABASE",
+        "SLURP_GENERATOR_CONCURRENCY",
     ):
         monkeypatch.delenv(var, raising=False)
     from slurp.domain.config import ConfluenceConfig
