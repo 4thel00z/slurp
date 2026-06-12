@@ -50,30 +50,40 @@ docker-compose up -d  # If you have a docker-compose.yml for Kafka/Redpanda
 
 ## Configuration
 
-Set up your environment variables:
+Copy `.env.example` to `.env` and fill in the values. A `.env` file in the working
+directory is auto-loaded. Precedence is **CLI flag > env var > `.env` file > default**.
+Legacy names (`CONFLUENCE_*`, `KAFKA_*`, `SQLITE_*`, `OPENROUTER_API_KEY`) still work
+as aliases for the new `SLURP_` vars.
+
+Key variables:
 
 ```bash
-export CONFLUENCE_BASE_URL="https://your-domain.atlassian.net"
-export CONFLUENCE_USERNAME="your-email@domain.com"
-export CONFLUENCE_API_KEY="your-api-token"
-export OPENROUTER_API_KEY="your-openrouter-key"
-export KAFKA_BOOTSTRAP_SERVERS="localhost:19092"
-export KAFKA_TOPIC="tasks"
-export SQLITE_DATABASE="./data.db"
+SLURP_LLM_API_KEY=""            # required when the generator is enabled
+SLURP_CONNECTOR="local"         # local | confluence
+SLURP_CONFLUENCE_BASE_URL="https://your-domain.atlassian.net"
+SLURP_CONFLUENCE_USERNAME="you@example.com"
+SLURP_CONFLUENCE_API_KEY=""
+SLURP_CONFLUENCE_SPACE=""       # required when SLURP_CONNECTOR=confluence
+SLURP_KAFKA_BOOTSTRAP_SERVERS="localhost:19092"
+SLURP_KAFKA_TOPIC="tasks"
+SLURP_SQLITE_DATABASE="./data.db"
 ```
+
+See `.env.example` for the full list including generator, local connector, and
+observability options.
 
 ### LLM provider
 
 The QA generator talks to any **OpenAI-compatible** endpoint, selected by
-`--generator-base-url` and an API key. The key is read from `LLM_API_KEY`
-(falling back to `OPENROUTER_API_KEY` for backwards compatibility).
+`--generator-base-url` and an API key. The key is read from `SLURP_LLM_API_KEY`
+(legacy `LLM_API_KEY` and `OPENROUTER_API_KEY` still work as aliases).
 
 ```bash
 # Default: OpenRouter
-export OPENROUTER_API_KEY="your-openrouter-key"
+export SLURP_LLM_API_KEY="your-openrouter-key"
 
 # Any other OpenAI-compatible endpoint
-export LLM_API_KEY="$(your-token-command)"   # or a static key
+export SLURP_LLM_API_KEY="$(your-token-command)"   # or a static key
 python -m slurp worker \
   --generator-base-url https://your-llm-endpoint.example/v1 \
   --generator-model your-model
@@ -92,7 +102,7 @@ Slurp ingests content through pluggable **connectors**, selected with
 | `confluence` | A Confluence space             | `CONFLUENCE_*` credentials        |
 
 Both connectors still flow through Kafka and the LLM generator, so a broker
-(`infra/docker-compose.yaml`) and `OPENROUTER_API_KEY` are required either way.
+(`infra/docker-compose.yaml`) and `SLURP_LLM_API_KEY` are required either way.
 
 #### Local files (default)
 
