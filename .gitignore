@@ -47,3 +47,6 @@ reports/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local planning/spec docs (not for the repo)
+docs/superpowers/
