@@ -52,12 +52,24 @@ docker compose -f infra/docker-compose.yaml up -d
 
 ## Configuration
 
-Copy `.env.example` to `.env` and fill in the values. A `.env` file in the working
-directory is auto-loaded. Precedence is **CLI flag > env var > `.env` file > default**.
-Legacy names (`CONFLUENCE_*`, `KAFKA_*`, `SQLITE_*`, `OPENROUTER_API_KEY`) still work
-as aliases for the new `SLURP_` vars.
+Slurp is configured from a **`.env` settings file**. Copy `.env.example` to `.env`
+in your working directory and fill in the values — it is loaded automatically on
+startup, so you don't need to export anything. Every setting can still be supplied
+as an environment variable or a CLI flag; precedence is
+**CLI flag > env var > `.env` file > default**.
 
-Key variables:
+```bash
+cp .env.example .env
+# edit .env, then just run:
+python -m slurp worker
+```
+
+The `.env` file is the recommended way to configure Slurp: it keeps your API keys
+and connector settings in one place, out of your shell history, and version-control
+ignored. Legacy names (`CONFLUENCE_*`, `KAFKA_*`, `SQLITE_*`, `OPENROUTER_API_KEY`)
+still work as aliases for the new `SLURP_` vars.
+
+Key settings (see `.env.example` for the full list):
 
 ```bash
 SLURP_LLM_API_KEY=""            # required when the generator is enabled

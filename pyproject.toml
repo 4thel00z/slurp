@@ -1,6 +1,6 @@
 [project]
 name = "slurp-rag"
-version = "0.1.0"
+version = "0.2.0"
 description = "Distributed RAG QA-evaluation dataset generator for local files and Confluence."
 readme = "README.md"
 requires-python = ">=3.12"
